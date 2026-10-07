@@ -1,0 +1,870 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor de calendario VIU</title>
+<style>
+  :root{
+    --ink:#202124;
+    --muted:#6b7280;
+    --line:#ef5b3d;
+    --paper:#ffffff;
+    --panel:#f7f8fa;
+    --border:#dfe3e8;
+    --weekend:#ff6f2c;
+    --accent:#2457c5;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:#eef1f5;
+    color:var(--ink);
+    font-family:Arial, Helvetica, sans-serif;
+  }
+  button,input,select{font:inherit}
+
+  .app{
+    width:min(1500px, 96vw);
+    margin:22px auto 40px;
+  }
+
+  .toolbar{
+    background:var(--paper);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:16px;
+    box-shadow:0 5px 18px rgba(0,0,0,.06);
+    display:grid;
+    grid-template-columns:repeat(6,minmax(130px,1fr));
+    gap:12px;
+    align-items:end;
+    position:sticky;
+    top:10px;
+    z-index:20;
+  }
+  .field{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .field label{
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:.04em;
+    color:#50545b;
+  }
+  .field input,.field select{
+    width:100%;
+    padding:9px 10px;
+    border:1px solid #cfd4da;
+    border-radius:8px;
+    background:white;
+  }
+  .toolbar-actions{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .btn{
+    border:1px solid #cfd4da;
+    border-radius:8px;
+    background:#fff;
+    padding:9px 12px;
+    cursor:pointer;
+    font-weight:700;
+  }
+  .btn:hover{background:#f3f4f6}
+  .btn.primary{
+    background:#1f56c2;
+    color:#fff;
+    border-color:#1f56c2;
+  }
+
+  .sheet{
+    margin-top:18px;
+    background:var(--paper);
+    padding:34px 44px 28px;
+    box-shadow:0 8px 28px rgba(0,0,0,.08);
+    min-height:1000px;
+  }
+
+  .masthead{
+    display:grid;
+    grid-template-columns:330px 1fr;
+    align-items:center;
+    gap:28px;
+  }
+  .logo-box{
+    min-height:115px;
+    border:2px solid #222;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:28px;
+    color:#222;
+    overflow:hidden;
+    position:relative;
+    background:#fff;
+  }
+  .logo-box img{
+    max-width:100%;
+    max-height:115px;
+    object-fit:contain;
+    display:none;
+  }
+  .logo-box span{pointer-events:none}
+  .heading{
+    text-align:right;
+  }
+  .heading .master{
+    font-family:Georgia, "Times New Roman", serif;
+    font-size:29px;
+    margin-bottom:12px;
+  }
+  .heading .titleline{
+    display:flex;
+    justify-content:flex-end;
+    gap:48px;
+    font-size:23px;
+    align-items:baseline;
+  }
+  .heading .titleline strong{font-weight:500}
+
+  .top-rule,.bottom-rule{
+    height:2px;
+    background:var(--line);
+    margin:12px 0 24px;
+  }
+
+  .months{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:26px 46px;
+  }
+  .month{
+    min-width:0;
+  }
+  .month h3{
+    margin:0 0 13px 0;
+    font-size:19px;
+    font-weight:800;
+  }
+  .weekdays,.days{
+    display:grid;
+    grid-template-columns:repeat(7,1fr);
+  }
+  .weekdays{
+    margin-bottom:5px;
+    color:#444;
+    font-size:9px;
+    font-weight:700;
+    letter-spacing:.09em;
+  }
+  .weekdays div,.day{
+    text-align:center;
+  }
+  .weekdays div{
+    padding:2px 0;
+  }
+  .day{
+    position:relative;
+    min-height:32px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin:1px;
+    border-radius:2px;
+    cursor:pointer;
+    user-select:none;
+    border:1px solid transparent;
+    font-size:15px;
+    transition:transform .04s ease, box-shadow .12s ease;
+  }
+  .day:hover:not(.blank){
+    border-color:rgba(0,0,0,.18);
+    box-shadow:0 1px 4px rgba(0,0,0,.12);
+  }
+  .day:active:not(.blank){transform:scale(.97)}
+  .day.blank{
+    cursor:default;
+  }
+  .day.weekend:not(.painted){color:var(--weekend)}
+  .day.painted{font-weight:500}
+  .day[data-active="true"]::after{
+    content:"";
+    position:absolute;
+    inset:2px;
+    border:2px solid rgba(0,0,0,.42);
+    border-radius:2px;
+    pointer-events:none;
+  }
+
+  .legend{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:18px 34px;
+    padding:12px 28px 6px;
+    font-size:13px;
+    font-weight:700;
+  }
+  .legend-item{
+    display:flex;
+    gap:9px;
+    align-items:flex-start;
+  }
+  .swatch{
+    width:12px;
+    height:12px;
+    flex:0 0 12px;
+    margin-top:2px;
+  }
+
+  .editor{
+    margin-top:22px;
+    background:var(--paper);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:18px;
+    box-shadow:0 5px 18px rgba(0,0,0,.05);
+  }
+  .editor h2{
+    margin:0 0 6px;
+    font-size:20px;
+  }
+  .editor p.help{
+    margin:0 0 16px;
+    color:#62676e;
+    font-size:14px;
+  }
+
+  .add-row{
+    display:grid;
+    grid-template-columns:minmax(240px,1.3fr) minmax(320px,2fr) auto;
+    gap:14px;
+    align-items:end;
+  }
+  .palette-wrap label{
+    display:block;
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:.04em;
+    margin-bottom:6px;
+    color:#50545b;
+  }
+  .palette{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .color-choice{
+    width:27px;
+    height:27px;
+    border:2px solid white;
+    outline:1px solid #c9ced4;
+    border-radius:5px;
+    cursor:pointer;
+  }
+  .color-choice.selected{
+    outline:3px solid #222;
+  }
+  .custom-color{
+    width:38px;
+    height:29px;
+    border:0;
+    padding:0;
+    background:transparent;
+    cursor:pointer;
+  }
+
+  .subjects{
+    margin-top:18px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .subject{
+    display:grid;
+    grid-template-columns:auto 22px 1fr auto auto;
+    gap:10px;
+    align-items:center;
+    padding:10px 12px;
+    border:1px solid #e1e4e8;
+    border-radius:9px;
+    background:#fafbfc;
+  }
+  .subject.active{
+    border-color:#333;
+    box-shadow:0 0 0 1px #333 inset;
+    background:#fff;
+  }
+  .subject .mini{
+    width:18px;
+    height:18px;
+    border-radius:3px;
+  }
+  .subject input[type="radio"]{transform:scale(1.1)}
+  .subject-name{
+    font-weight:700;
+  }
+  .subject-count{
+    color:#697078;
+    font-size:12px;
+  }
+  .icon-btn{
+    border:1px solid #d8dde2;
+    background:white;
+    border-radius:7px;
+    padding:6px 9px;
+    cursor:pointer;
+  }
+  .icon-btn:hover{background:#f1f3f5}
+
+  .empty{
+    color:#73777e;
+    font-style:italic;
+    padding:6px 0;
+  }
+
+  .status{
+    margin-top:12px;
+    font-size:13px;
+    color:#60656b;
+  }
+
+  @media (max-width:1000px){
+    .toolbar{grid-template-columns:repeat(3,1fr);position:static}
+    .sheet{padding:26px 24px}
+    .masthead{grid-template-columns:240px 1fr}
+    .months{gap:22px 24px}
+  }
+
+  @media (max-width:760px){
+    .toolbar{grid-template-columns:1fr 1fr}
+    .masthead{grid-template-columns:1fr}
+    .heading{text-align:left}
+    .heading .titleline{justify-content:flex-start;gap:20px;flex-wrap:wrap}
+    .months{grid-template-columns:1fr}
+    .legend{grid-template-columns:1fr 1fr;padding:10px 0}
+    .add-row{grid-template-columns:1fr}
+  }
+
+  @media print{
+    @page{size:A4 landscape;margin:8mm}
+    html,body{
+      width:100%;
+      background:white !important;
+    }
+    body{
+      margin:0;
+      -webkit-print-color-adjust:exact;
+      print-color-adjust:exact;
+    }
+    .app{
+      width:100% !important;
+      max-width:none !important;
+      margin:0 !important;
+    }
+    .toolbar,.editor{
+      display:none !important;
+    }
+    .sheet{
+      width:100% !important;
+      max-width:none !important;
+      box-shadow:none !important;
+      margin:0 !important;
+      padding:0 !important;
+      min-height:0 !important;
+    }
+    .masthead{
+      grid-template-columns:220px 1fr !important;
+      gap:20px !important;
+    }
+    .logo-box{min-height:76px}
+    .logo-box img{max-height:76px}
+    .heading .master{
+      font-size:21px;
+      margin-bottom:8px;
+    }
+    .heading .titleline{
+      font-size:17px;
+      gap:28px;
+    }
+    .top-rule,.bottom-rule{
+      margin:8px 0 14px;
+    }
+    .months{
+      display:grid !important;
+      grid-template-columns:repeat(3, minmax(0, 1fr)) !important;
+      gap:12px 18px !important;
+      width:100% !important;
+    }
+    .month{
+      min-width:0 !important;
+      break-inside:avoid;
+      page-break-inside:avoid;
+    }
+    .month h3{
+      font-size:13px;
+      margin-bottom:5px;
+    }
+    .weekdays{
+      font-size:6.5px;
+      margin-bottom:3px;
+    }
+    .day{
+      min-height:20px;
+      margin:0.5px;
+      font-size:10px;
+    }
+    .legend{
+      grid-template-columns:repeat(3,1fr) !important;
+      font-size:8.5px;
+      gap:7px 18px;
+      padding:6px 12px 0;
+    }
+    .swatch{
+      width:9px;
+      height:9px;
+      flex-basis:9px;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <section class="toolbar">
+    <div class="field">
+      <label for="year">Año</label>
+      <input id="year" type="number" min="1900" max="2200" value="2027">
+    </div>
+    <div class="field">
+      <label for="fromMonth">Mes desde</label>
+      <select id="fromMonth"></select>
+    </div>
+    <div class="field">
+      <label for="toMonth">Mes hasta</label>
+      <select id="toMonth"></select>
+    </div>
+    <div class="field">
+      <label for="title">Título</label>
+      <input id="title" value="Título" placeholder="Título">
+    </div>
+    <div class="field">
+      <label for="edition">Edición</label>
+      <input id="edition" value="EDICIÓN" placeholder="Edición">
+    </div>
+    <div class="toolbar-actions">
+      <button class="btn" id="logoBtn" type="button">Logo</button>
+      <input id="logoInput" type="file" accept="image/*" hidden>
+      <button class="btn primary" id="printBtn" type="button">Imprimir / PDF</button>
+    </div>
+  </section>
+
+  <main class="sheet" id="sheet">
+    <header class="masthead">
+      <div class="logo-box" id="logoBox" title="Pulsa el botón Logo para cargar una imagen">
+        <span id="logoText">LOGO</span>
+        <img id="logoImg" alt="Logo">
+      </div>
+      <div class="heading">
+        <div class="master">Máster Universitario</div>
+        <div class="titleline">
+          <strong id="titleOut">Título</strong>
+          <strong id="editionOut">EDICIÓN</strong>
+        </div>
+      </div>
+    </header>
+
+    <div class="top-rule"></div>
+
+    <section class="months" id="months"></section>
+
+    <div class="bottom-rule"></div>
+
+    <section class="legend" id="legend"></section>
+  </main>
+
+  <section class="editor">
+    <h2>Asignaturas y periodos</h2>
+    <p class="help">
+      Añade una asignatura o periodo, selecciónalo y después pulsa sobre los días del calendario.
+      Si pulsas un día que ya tiene el color activo, se desmarca. Si tenía otro color, se sustituye por el activo.
+    </p>
+
+    <div class="add-row">
+      <div class="field">
+        <label for="newName">Nombre</label>
+        <input id="newName" placeholder="Ej.: Periodo defensas TFM">
+      </div>
+
+      <div class="palette-wrap">
+        <label>Color</label>
+        <div class="palette" id="palette"></div>
+      </div>
+
+      <button class="btn primary" id="addSubject" type="button">Añadir</button>
+    </div>
+
+    <div class="subjects" id="subjects"></div>
+    <div class="status" id="status">No hay ninguna asignatura/periodo seleccionado.</div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const MONTHS = [
+    "Enero","Febrero","Marzo","Abril","Mayo","Junio",
+    "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"
+  ];
+  const WEEKDAYS = ["LUN","MAR","MIÉ","JUE","VIE","SÁB","DOM"];
+
+  const PALETTE = [
+    "#d7ef18",
+    "#8b21ef",
+    "#a9a9a9",
+    "#a68a78",
+    "#199be6",
+    "#ff729e",
+    "#0b927f",
+    "#1bcfb4",
+    "#ffc090",
+    "#ff8a28",
+    "#c8be29",
+    "#14863d",
+    "#78aeca",
+    "#f19191",
+    "#ff4054",
+    "#f39aeb",
+    "#6d83ff",
+    "#b5df72",
+    "#f6c85f",
+    "#9d7de3"
+  ];
+
+  const state = {
+    subjects: [],
+    activeId: null,
+    marks: {},
+    selectedColor: PALETTE[0]
+  };
+
+  const els = {
+    year: document.getElementById("year"),
+    fromMonth: document.getElementById("fromMonth"),
+    toMonth: document.getElementById("toMonth"),
+    title: document.getElementById("title"),
+    edition: document.getElementById("edition"),
+    titleOut: document.getElementById("titleOut"),
+    editionOut: document.getElementById("editionOut"),
+    months: document.getElementById("months"),
+    legend: document.getElementById("legend"),
+    palette: document.getElementById("palette"),
+    newName: document.getElementById("newName"),
+    addSubject: document.getElementById("addSubject"),
+    subjects: document.getElementById("subjects"),
+    status: document.getElementById("status"),
+    printBtn: document.getElementById("printBtn"),
+    logoBtn: document.getElementById("logoBtn"),
+    logoInput: document.getElementById("logoInput"),
+    logoImg: document.getElementById("logoImg"),
+    logoText: document.getElementById("logoText")
+  };
+
+  function initMonthSelectors(){
+    MONTHS.forEach((name,i) => {
+      const o1 = document.createElement("option");
+      o1.value = i;
+      o1.textContent = name;
+      const o2 = o1.cloneNode(true);
+      els.fromMonth.appendChild(o1);
+      els.toMonth.appendChild(o2);
+    });
+    els.fromMonth.value = "0";
+    els.toMonth.value = "11";
+  }
+
+  function dateKey(year, month, day){
+    return year + "-" + String(month+1).padStart(2,"0") + "-" + String(day).padStart(2,"0");
+  }
+
+  function getSubject(id){
+    return state.subjects.find(s => s.id === id) || null;
+  }
+
+  function renderCalendar(){
+    let year = parseInt(els.year.value,10);
+    if(!Number.isFinite(year)) year = new Date().getFullYear();
+
+    let from = parseInt(els.fromMonth.value,10);
+    let to = parseInt(els.toMonth.value,10);
+    if(from > to){
+      to = from;
+      els.toMonth.value = String(to);
+    }
+
+    els.months.innerHTML = "";
+
+    for(let month = from; month <= to; month++){
+      const box = document.createElement("article");
+      box.className = "month";
+
+      const h = document.createElement("h3");
+      h.textContent = MONTHS[month] + " " + year;
+      box.appendChild(h);
+
+      const weekdays = document.createElement("div");
+      weekdays.className = "weekdays";
+      WEEKDAYS.forEach(w => {
+        const d = document.createElement("div");
+        d.textContent = w;
+        weekdays.appendChild(d);
+      });
+      box.appendChild(weekdays);
+
+      const days = document.createElement("div");
+      days.className = "days";
+
+      const first = new Date(year, month, 1);
+      const leading = (first.getDay() + 6) % 7;
+      const total = new Date(year, month + 1, 0).getDate();
+
+      for(let i=0;i<leading;i++){
+        const blank = document.createElement("div");
+        blank.className = "day blank";
+        days.appendChild(blank);
+      }
+
+      for(let day=1; day<=total; day++){
+        const el = document.createElement("div");
+        el.className = "day";
+        el.textContent = day;
+
+        const jsDay = new Date(year, month, day).getDay();
+        if(jsDay === 0 || jsDay === 6) el.classList.add("weekend");
+
+        const key = dateKey(year, month, day);
+        el.dataset.date = key;
+
+        const subjectId = state.marks[key];
+        const subject = getSubject(subjectId);
+        if(subject){
+          el.style.backgroundColor = subject.color;
+          el.classList.add("painted");
+          el.title = key + " — " + subject.name;
+          if(subject.id === state.activeId) el.dataset.active = "true";
+        }else{
+          el.title = key;
+        }
+
+        el.addEventListener("click", () => toggleDay(key));
+        days.appendChild(el);
+      }
+
+      box.appendChild(days);
+      els.months.appendChild(box);
+    }
+  }
+
+  function renderPalette(){
+    els.palette.innerHTML = "";
+    PALETTE.forEach(color => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "color-choice" + (state.selectedColor === color ? " selected" : "");
+      b.style.background = color;
+      b.title = color;
+      b.addEventListener("click", () => {
+        state.selectedColor = color;
+        renderPalette();
+      });
+      els.palette.appendChild(b);
+    });
+
+    const custom = document.createElement("input");
+    custom.type = "color";
+    custom.className = "custom-color";
+    custom.value = /^#[0-9a-f]{6}$/i.test(state.selectedColor) ? state.selectedColor : "#4477aa";
+    custom.title = "Elegir otro color";
+    custom.addEventListener("input", () => {
+      state.selectedColor = custom.value;
+      renderPalette();
+    });
+    els.palette.appendChild(custom);
+  }
+
+  function renderSubjects(){
+    els.subjects.innerHTML = "";
+
+    if(state.subjects.length === 0){
+      const e = document.createElement("div");
+      e.className = "empty";
+      e.textContent = "Todavía no has añadido ninguna asignatura o periodo.";
+      els.subjects.appendChild(e);
+    }else{
+      state.subjects.forEach(subject => {
+        const row = document.createElement("div");
+        row.className = "subject" + (subject.id === state.activeId ? " active" : "");
+
+        const radio = document.createElement("input");
+        radio.type = "radio";
+        radio.name = "subject";
+        radio.checked = subject.id === state.activeId;
+        radio.addEventListener("change", () => {
+          state.activeId = subject.id;
+          renderSubjects();
+          renderCalendar();
+          updateStatus();
+        });
+
+        const mini = document.createElement("div");
+        mini.className = "mini";
+        mini.style.background = subject.color;
+
+        const name = document.createElement("div");
+        const title = document.createElement("div");
+        title.className = "subject-name";
+        title.textContent = subject.name;
+        const countLine = document.createElement("div");
+        countLine.className = "subject-count";
+        const count = Object.values(state.marks).filter(id => id === subject.id).length;
+        countLine.textContent = count + " día" + (count===1 ? "" : "s") + " marcado" + (count===1 ? "" : "s");
+        name.append(title, countLine);
+
+        const rename = document.createElement("button");
+        rename.type = "button";
+        rename.className = "icon-btn";
+        rename.textContent = "Editar";
+        rename.addEventListener("click", () => {
+          const newName = prompt("Nuevo nombre:", subject.name);
+          if(newName !== null && newName.trim()){
+            subject.name = newName.trim();
+            renderAll();
+          }
+        });
+
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "icon-btn";
+        del.textContent = "Eliminar";
+        del.addEventListener("click", () => {
+          if(!confirm('¿Eliminar "' + subject.name + '" y sus días marcados?')) return;
+          Object.keys(state.marks).forEach(k => {
+            if(state.marks[k] === subject.id) delete state.marks[k];
+          });
+          state.subjects = state.subjects.filter(s => s.id !== subject.id);
+          if(state.activeId === subject.id){
+            state.activeId = state.subjects[0]?.id ?? null;
+          }
+          renderAll();
+        });
+
+        row.append(radio, mini, name, rename, del);
+        els.subjects.appendChild(row);
+      });
+    }
+    renderLegend();
+  }
+
+  function renderLegend(){
+    els.legend.innerHTML = "";
+    state.subjects.forEach(subject => {
+      const item = document.createElement("div");
+      item.className = "legend-item";
+      const sw = document.createElement("span");
+      sw.className = "swatch";
+      sw.style.background = subject.color;
+      const tx = document.createElement("span");
+      tx.textContent = subject.name;
+      item.append(sw,tx);
+      els.legend.appendChild(item);
+    });
+  }
+
+  function toggleDay(key){
+    if(!state.activeId){
+      alert("Primero selecciona una asignatura o periodo.");
+      return;
+    }
+    if(state.marks[key] === state.activeId){
+      delete state.marks[key];
+    }else{
+      state.marks[key] = state.activeId;
+    }
+    renderCalendar();
+    renderSubjects();
+    updateStatus();
+  }
+
+  function updateStatus(){
+    const subject = getSubject(state.activeId);
+    if(!subject){
+      els.status.textContent = "No hay ninguna asignatura/periodo seleccionado.";
+    }else{
+      els.status.textContent = "Activo: " + subject.name + ". Pulsa días para marcar o desmarcar.";
+    }
+  }
+
+  function addSubject(){
+    const name = els.newName.value.trim();
+    if(!name){
+      alert("Escribe un nombre para la asignatura o periodo.");
+      els.newName.focus();
+      return;
+    }
+    const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random();
+    state.subjects.push({id,name,color:state.selectedColor});
+    state.activeId = id;
+    els.newName.value = "";
+    renderAll();
+    els.newName.focus();
+  }
+
+  function renderAll(){
+    els.titleOut.textContent = els.title.value.trim() || "Título";
+    els.editionOut.textContent = els.edition.value.trim() || "EDICIÓN";
+    renderCalendar();
+    renderSubjects();
+    updateStatus();
+  }
+
+  [els.year, els.fromMonth, els.toMonth].forEach(el => el.addEventListener("change", renderCalendar));
+  els.title.addEventListener("input", () => els.titleOut.textContent = els.title.value || "Título");
+  els.edition.addEventListener("input", () => els.editionOut.textContent = els.edition.value || "EDICIÓN");
+  els.addSubject.addEventListener("click", addSubject);
+  els.newName.addEventListener("keydown", e => {
+    if(e.key === "Enter") addSubject();
+  });
+  els.printBtn.addEventListener("click", () => window.print());
+
+  els.logoBtn.addEventListener("click", () => els.logoInput.click());
+  els.logoInput.addEventListener("change", () => {
+    const file = els.logoInput.files?.[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      els.logoImg.src = e.target.result;
+      els.logoImg.style.display = "block";
+      els.logoText.style.display = "none";
+    };
+    reader.readAsDataURL(file);
+  });
+
+  initMonthSelectors();
+  renderPalette();
+
+  state.subjects = [
+    {id:"festivos", name:"Festivos", color:"#ff4054"},
+    {id:"nolectivo", name:"No lectivo", color:"#f39aeb"},
+    {id:"defensas", name:"Periodo Defensa TFM", color:"#c8be29"},
+    {id:"tutoria", name:"Tutoría Colectiva TFM", color:"#199be6"}
+  ];
+  state.activeId = "festivos";
+
+  renderAll();
+})();
+</script>
+</body>
+</html>
