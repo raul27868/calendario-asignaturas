@@ -325,6 +325,22 @@
   }
   .icon-btn:hover{background:#f1f3f5}
 
+  .swap-action-row{
+    margin-top:18px;
+  }
+  .swap-controls{
+    display:grid;
+    grid-template-columns:1fr 1fr auto;
+    gap:12px;
+    align-items:end;
+    margin-top:12px;
+    padding:14px;
+    border:1px solid #e1e4e8;
+    border-radius:9px;
+    background:#fafbfc;
+  }
+  .swap-controls[hidden]{display:none}
+
   .empty{
     color:#73777e;
     font-style:italic;
@@ -352,6 +368,7 @@
     .months{grid-template-columns:1fr}
     .legend{grid-template-columns:1fr 1fr;padding:10px 0}
     .add-row{grid-template-columns:1fr}
+    .swap-controls{grid-template-columns:1fr}
   }
 
   @media print{
@@ -515,6 +532,21 @@
       <button class="btn primary" id="addSubject" type="button">Añadir</button>
     </div>
 
+    <div class="swap-action-row">
+      <button class="btn" id="toggleSwapBtn" type="button" aria-expanded="false" aria-controls="swapControls" disabled>Intercambiar colores</button>
+    </div>
+    <div class="swap-controls" id="swapControls" hidden>
+      <div class="field">
+        <label for="swapSubjectA">Primera asignatura/periodo</label>
+        <select id="swapSubjectA"></select>
+      </div>
+      <div class="field">
+        <label for="swapSubjectB">Segunda asignatura/periodo</label>
+        <select id="swapSubjectB"></select>
+      </div>
+      <button class="btn primary" id="confirmSwapBtn" type="button">Intercambiar</button>
+    </div>
+
     <div class="subjects" id="subjects"></div>
     <div class="status" id="status">No hay ninguna asignatura/periodo seleccionado.</div>
   </section>
@@ -572,6 +604,11 @@
     newName: document.getElementById("newName"),
     addSubject: document.getElementById("addSubject"),
     subjects: document.getElementById("subjects"),
+    toggleSwapBtn: document.getElementById("toggleSwapBtn"),
+    swapControls: document.getElementById("swapControls"),
+    swapSubjectA: document.getElementById("swapSubjectA"),
+    swapSubjectB: document.getElementById("swapSubjectB"),
+    confirmSwapBtn: document.getElementById("confirmSwapBtn"),
     status: document.getElementById("status"),
     loadCalendarBtn: document.getElementById("loadCalendarBtn"),
     calendarFileInput: document.getElementById("calendarFileInput"),
@@ -775,7 +812,47 @@
         els.subjects.appendChild(row);
       });
     }
+    renderSwapControls();
     renderLegend();
+  }
+
+  function renderSwapControls(){
+    const previousA = els.swapSubjectA.value;
+    const previousB = els.swapSubjectB.value;
+    const available = new Set(state.subjects.map(subject => subject.id));
+
+    [els.swapSubjectA, els.swapSubjectB].forEach(select => {
+      select.innerHTML = "";
+      state.subjects.forEach(subject => {
+        const option = document.createElement("option");
+        option.value = subject.id;
+        option.textContent = subject.name;
+        select.appendChild(option);
+      });
+    });
+
+    const firstId = available.has(previousA) ? previousA : state.subjects[0]?.id;
+    const secondId = available.has(previousB) && previousB !== firstId
+      ? previousB
+      : state.subjects.find(subject => subject.id !== firstId)?.id;
+    if(firstId) els.swapSubjectA.value = firstId;
+    if(secondId) els.swapSubjectB.value = secondId;
+
+    els.toggleSwapBtn.disabled = state.subjects.length < 2;
+  }
+
+  function swapSubjectColors(){
+    const first = getSubject(els.swapSubjectA.value);
+    const second = getSubject(els.swapSubjectB.value);
+    if(!first || !second || first.id === second.id){
+      alert("Selecciona dos asignaturas o periodos diferentes.");
+      return;
+    }
+
+    [first.color, second.color] = [second.color, first.color];
+    els.swapControls.hidden = true;
+    els.toggleSwapBtn.setAttribute("aria-expanded", "false");
+    renderAll();
   }
 
   function renderLegend(){
@@ -985,6 +1062,12 @@
   els.title.addEventListener("input", () => els.titleOut.textContent = els.title.value || "Título");
   els.edition.addEventListener("input", () => els.editionOut.textContent = els.edition.value || "EDICIÓN");
   els.addSubject.addEventListener("click", addSubject);
+  els.toggleSwapBtn.addEventListener("click", () => {
+    const opening = els.swapControls.hidden;
+    els.swapControls.hidden = !opening;
+    els.toggleSwapBtn.setAttribute("aria-expanded", String(opening));
+  });
+  els.confirmSwapBtn.addEventListener("click", swapSubjectColors);
   els.newName.addEventListener("keydown", e => {
     if(e.key === "Enter") addSubject();
   });

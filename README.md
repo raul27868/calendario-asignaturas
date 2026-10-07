@@ -13,6 +13,7 @@ Funciones disponibles:
 - título y edición;
 - calendario en tres columnas;
 - creación de asignaturas y periodos con color;
+- intercambio de colores entre asignaturas y periodos, conservando los días asociados a cada uno;
 - selección de una asignatura/periodo activo;
 - marcado y desmarcado de días con clic;
 - leyenda automática;
