@@ -48,3 +48,19 @@ Mantener la aplicación autocontenida en `index.html`:
    - colores visibles;
    - leyenda presente;
    - controles de edición ocultos.
+
+## Economía de recursos Codex
+
+- Usa la mínima cantidad de contexto necesaria.
+- No leas el repositorio completo si el cambio está localizado.
+- Empieza por buscar símbolos, ids, clases o funciones concretas.
+- No vuelvas a leer archivos ya inspeccionados salvo que hayan cambiado.
+- Evita explicaciones largas; responde con resumen breve + archivos modificados + pruebas realizadas.
+- Para tareas simples, actúa directamente sin plan extenso.
+- Si una petición probablemente exige una exploración amplia, refactorización extensa,
+  múltiples archivos o muchas iteraciones:
+  1. advierte antes;
+  2. explica brevemente por qué puede consumir bastante contexto;
+  3. propone dividirla en pasos pequeños;
+  4. no inicies la parte costosa hasta recibir confirmación.
+- Antes de una operación amplia, intenta una solución localizada.
