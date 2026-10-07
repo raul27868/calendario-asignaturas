@@ -63,9 +63,13 @@
     background:white;
   }
   .toolbar-actions{
+    grid-column:1 / -1;
     display:flex;
+    justify-content:flex-end;
     gap:8px;
     flex-wrap:wrap;
+    padding-top:12px;
+    border-top:1px solid #eceff2;
   }
   .btn{
     border:1px solid #cfd4da;
@@ -456,7 +460,10 @@
       <label for="edition">Edición</label>
       <input id="edition" value="EDICIÓN" placeholder="Edición">
     </div>
-    <div class="toolbar-actions">
+    <div class="toolbar-actions" aria-label="Acciones del calendario">
+      <button class="btn" id="loadCalendarBtn" type="button">↑ Cargar calendario</button>
+      <input id="calendarFileInput" type="file" accept=".json,application/json" hidden>
+      <button class="btn" id="downloadCalendarBtn" type="button">↓ Descargar calendario</button>
       <button class="btn" id="logoBtn" type="button">Logo</button>
       <input id="logoInput" type="file" accept="image/*" hidden>
       <button class="btn primary" id="printBtn" type="button">Imprimir / PDF</button>
@@ -566,6 +573,9 @@
     addSubject: document.getElementById("addSubject"),
     subjects: document.getElementById("subjects"),
     status: document.getElementById("status"),
+    loadCalendarBtn: document.getElementById("loadCalendarBtn"),
+    calendarFileInput: document.getElementById("calendarFileInput"),
+    downloadCalendarBtn: document.getElementById("downloadCalendarBtn"),
     printBtn: document.getElementById("printBtn"),
     logoBtn: document.getElementById("logoBtn"),
     logoInput: document.getElementById("logoInput"),
@@ -830,6 +840,147 @@
     updateStatus();
   }
 
+  function safeFilenamePart(value){
+    return String(value || "")
+      .trim()
+      .replace(/[\\/:*?"<>|]+/g, "-")
+      .replace(/\s+/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^[-_.]+|[-_.]+$/g, "");
+  }
+
+  function suggestedCalendarFilename(){
+    const title = safeFilenamePart(els.title.value) || "Calendario";
+    const edition = safeFilenamePart(els.edition.value);
+    const from = parseInt(els.fromMonth.value, 10);
+    const to = parseInt(els.toMonth.value, 10);
+    const range = from === to ? MONTHS[from] : MONTHS[from] + "-" + MONTHS[to];
+    return [title, edition, safeFilenamePart(range)].filter(Boolean).join("_") + ".json";
+  }
+
+  function exportCalendar(){
+    const data = {
+      format: "calendario-asignaturas",
+      version: 1,
+      savedAt: new Date().toISOString(),
+      calendar: {
+        year: parseInt(els.year.value, 10),
+        fromMonth: parseInt(els.fromMonth.value, 10),
+        toMonth: parseInt(els.toMonth.value, 10),
+        title: els.title.value,
+        edition: els.edition.value
+      },
+      subjects: state.subjects.map(subject => ({
+        id: subject.id,
+        name: subject.name,
+        color: subject.color
+      })),
+      marks: {...state.marks}
+    };
+
+    const suggested = suggestedCalendarFilename();
+    let filename = prompt("Nombre del fichero JSON:", suggested);
+    if(filename === null) return;
+    filename = filename.trim() || suggested;
+    if(!filename.toLowerCase().endsWith(".json")) filename += ".json";
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json;charset=utf-8"
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function validateCalendarData(data){
+    if(!data || typeof data !== "object") throw new Error("El JSON no contiene un objeto válido.");
+    if(data.format !== "calendario-asignaturas") throw new Error("El fichero no es un calendario compatible.");
+    if(data.version !== 1) throw new Error("Versión de calendario no compatible.");
+    if(!data.calendar || typeof data.calendar !== "object") throw new Error("Faltan los datos generales del calendario.");
+    if(!Array.isArray(data.subjects)) throw new Error("Falta la lista de asignaturas/periodos.");
+    if(!data.marks || typeof data.marks !== "object" || Array.isArray(data.marks)) throw new Error("Faltan los días marcados.");
+
+    const year = Number(data.calendar.year);
+    const fromMonth = Number(data.calendar.fromMonth);
+    const toMonth = Number(data.calendar.toMonth);
+    if(!Number.isInteger(year) || year < 1900 || year > 2200) throw new Error("El año no es válido.");
+    if(!Number.isInteger(fromMonth) || !Number.isInteger(toMonth) ||
+       fromMonth < 0 || fromMonth > 11 || toMonth < 0 || toMonth > 11 || fromMonth > toMonth){
+      throw new Error("El rango de meses no es válido.");
+    }
+
+    const ids = new Set();
+    const subjects = data.subjects.map((subject, index) => {
+      if(!subject || typeof subject !== "object") throw new Error("Asignatura/periodo inválido en la posición " + (index + 1) + ".");
+      const id = String(subject.id || "").trim();
+      const name = String(subject.name || "").trim();
+      const color = String(subject.color || "").trim();
+      if(!id || ids.has(id)) throw new Error("Hay identificadores de asignatura vacíos o duplicados.");
+      if(!name) throw new Error("Hay una asignatura/periodo sin nombre.");
+      if(!/^#[0-9a-f]{6}$/i.test(color)) throw new Error('Color inválido en "' + name + '".');
+      ids.add(id);
+      return {id, name, color};
+    });
+
+    const marks = {};
+    for(const [date, subjectId] of Object.entries(data.marks)){
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Fecha inválida: " + date);
+      if(!ids.has(String(subjectId))) throw new Error("Un día marcado hace referencia a una asignatura inexistente.");
+      const parsed = new Date(date + "T00:00:00");
+      if(Number.isNaN(parsed.getTime()) || parsed.getFullYear() !== Number(date.slice(0,4)) ||
+         parsed.getMonth() + 1 !== Number(date.slice(5,7)) || parsed.getDate() !== Number(date.slice(8,10))){
+        throw new Error("Fecha inexistente: " + date);
+      }
+      marks[date] = String(subjectId);
+    }
+
+    return {
+      calendar: {
+        year,
+        fromMonth,
+        toMonth,
+        title: String(data.calendar.title ?? ""),
+        edition: String(data.calendar.edition ?? "")
+      },
+      subjects,
+      marks
+    };
+  }
+
+  async function importCalendarFile(file){
+    try{
+      const raw = await file.text();
+      const parsed = JSON.parse(raw);
+      const loaded = validateCalendarData(parsed);
+
+      if(!confirm('Cargar "' + file.name + '" sustituirá el calendario actual. ¿Continuar?')) return;
+
+      els.year.value = String(loaded.calendar.year);
+      els.fromMonth.value = String(loaded.calendar.fromMonth);
+      els.toMonth.value = String(loaded.calendar.toMonth);
+      els.title.value = loaded.calendar.title;
+      els.edition.value = loaded.calendar.edition;
+
+      state.subjects = loaded.subjects;
+      state.marks = loaded.marks;
+      state.activeId = state.subjects[0]?.id ?? null;
+      if(state.subjects[0]) state.selectedColor = state.subjects[0].color;
+
+      renderPalette();
+      renderAll();
+      alert("Calendario cargado correctamente.");
+    }catch(error){
+      alert("No se pudo cargar el calendario.\n\n" + (error?.message || "Fichero JSON no válido."));
+    }finally{
+      els.calendarFileInput.value = "";
+    }
+  }
+
   [els.year, els.fromMonth, els.toMonth].forEach(el => el.addEventListener("change", renderCalendar));
   els.title.addEventListener("input", () => els.titleOut.textContent = els.title.value || "Título");
   els.edition.addEventListener("input", () => els.editionOut.textContent = els.edition.value || "EDICIÓN");
@@ -837,6 +988,13 @@
   els.newName.addEventListener("keydown", e => {
     if(e.key === "Enter") addSubject();
   });
+  els.downloadCalendarBtn.addEventListener("click", exportCalendar);
+  els.loadCalendarBtn.addEventListener("click", () => els.calendarFileInput.click());
+  els.calendarFileInput.addEventListener("change", () => {
+    const file = els.calendarFileInput.files?.[0];
+    if(file) importCalendarFile(file);
+  });
+
   els.printBtn.addEventListener("click", () => window.print());
 
   els.logoBtn.addEventListener("click", () => els.logoInput.click());
