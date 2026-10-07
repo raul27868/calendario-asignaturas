@@ -647,19 +647,19 @@
 
     let from = parseInt(els.fromMonth.value,10);
     let to = parseInt(els.toMonth.value,10);
-    if(from > to){
-      to = from;
-      els.toMonth.value = String(to);
-    }
 
     els.months.innerHTML = "";
 
-    for(let month = from; month <= to; month++){
+    const monthCount = (to - from + 12) % 12 + 1;
+    for(let offset = 0; offset < monthCount; offset++){
+      const date = new Date(year, from + offset, 1);
+      const monthYear = date.getFullYear();
+      const month = date.getMonth();
       const box = document.createElement("article");
       box.className = "month";
 
       const h = document.createElement("h3");
-      h.textContent = MONTHS[month] + " " + year;
+      h.textContent = MONTHS[month] + " " + monthYear;
       box.appendChild(h);
 
       const weekdays = document.createElement("div");
@@ -674,9 +674,9 @@
       const days = document.createElement("div");
       days.className = "days";
 
-      const first = new Date(year, month, 1);
+      const first = new Date(monthYear, month, 1);
       const leading = (first.getDay() + 6) % 7;
-      const total = new Date(year, month + 1, 0).getDate();
+      const total = new Date(monthYear, month + 1, 0).getDate();
 
       for(let i=0;i<leading;i++){
         const blank = document.createElement("div");
@@ -689,10 +689,10 @@
         el.className = "day";
         el.textContent = day;
 
-        const jsDay = new Date(year, month, day).getDay();
+        const jsDay = new Date(monthYear, month, day).getDay();
         if(jsDay === 0 || jsDay === 6) el.classList.add("weekend");
 
-        const key = dateKey(year, month, day);
+        const key = dateKey(monthYear, month, day);
         el.dataset.date = key;
 
         const subjectId = state.marks[key];
@@ -931,7 +931,13 @@
     const edition = safeFilenamePart(els.edition.value);
     const from = parseInt(els.fromMonth.value, 10);
     const to = parseInt(els.toMonth.value, 10);
-    const range = from === to ? MONTHS[from] : MONTHS[from] + "-" + MONTHS[to];
+    const year = parseInt(els.year.value, 10);
+    const wrapsYear = from > to;
+    const range = from === to
+      ? MONTHS[from]
+      : wrapsYear
+        ? MONTHS[from] + "-" + year + "-" + MONTHS[to] + "-" + (year + 1)
+        : MONTHS[from] + "-" + MONTHS[to];
     return [title, edition, safeFilenamePart(range)].filter(Boolean).join("_") + ".json";
   }
 
@@ -987,7 +993,7 @@
     const toMonth = Number(data.calendar.toMonth);
     if(!Number.isInteger(year) || year < 1900 || year > 2200) throw new Error("El año no es válido.");
     if(!Number.isInteger(fromMonth) || !Number.isInteger(toMonth) ||
-       fromMonth < 0 || fromMonth > 11 || toMonth < 0 || toMonth > 11 || fromMonth > toMonth){
+       fromMonth < 0 || fromMonth > 11 || toMonth < 0 || toMonth > 11){
       throw new Error("El rango de meses no es válido.");
     }
 

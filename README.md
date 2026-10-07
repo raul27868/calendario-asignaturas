@@ -9,7 +9,7 @@ La aplicación está contenida en un único fichero `index.html`.
 Funciones disponibles:
 
 - selección de año;
-- selección de mes inicial y final;
+- selección de mes inicial y final, admitiendo rangos que terminan el año siguiente;
 - título y edición;
 - calendario en tres columnas;
 - creación de asignaturas y periodos con color;
