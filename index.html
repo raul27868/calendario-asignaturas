@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Editor de calendario VIU</title>
+<title>Editor de calendario</title>
 <style>
   :root{
     --ink:#202124;
@@ -70,6 +70,17 @@
     flex-wrap:wrap;
     padding-top:12px;
     border-top:1px solid #eceff2;
+  }
+  .toolbar-option{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    min-height:38px;
+    font-size:13px;
+    font-weight:700;
+  }
+  .toolbar-option input{
+    margin:0;
   }
   .btn{
     border:1px solid #cfd4da;
@@ -140,6 +151,29 @@
     height:2px;
     background:var(--line);
     margin:12px 0 24px;
+  }
+
+  .top-subjects{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 18px;
+    margin:-12px 0 20px;
+  }
+  .top-subjects[hidden]{
+    display:none;
+  }
+  .top-subject-item{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:13px;
+    font-weight:600;
+  }
+  .top-subject-swatch{
+    width:10px;
+    height:10px;
+    flex:0 0 10px;
+    border-radius:2px;
   }
 
   .months{
@@ -511,6 +545,22 @@
       margin:2.5mm 0 5mm !important;
     }
 
+    .top-subjects{
+      gap:1.5mm 4mm !important;
+      margin:-2mm 0 3mm !important;
+    }
+
+    .top-subject-item{
+      gap:1.2mm !important;
+      font-size:7pt !important;
+    }
+
+    .top-subject-swatch{
+      width:2.2mm !important;
+      height:2.2mm !important;
+      flex:0 0 2.2mm !important;
+    }
+
     .bottom-rule{
       margin:5mm 0 4mm !important;
     }
@@ -620,6 +670,10 @@
       <label for="edition">Edición</label>
       <input id="edition" value="EDICIÓN" placeholder="Edición">
     </div>
+    <div class="toolbar-option">
+      <input id="showTopSubjects" type="checkbox">
+      <label for="showTopSubjects">Mostrar asignaturas al inicio</label>
+    </div>
     <div class="toolbar-actions" aria-label="Acciones del calendario">
       <button class="btn" id="loadCalendarBtn" type="button">↑ Cargar calendario</button>
       <input id="calendarFileInput" type="file" accept=".json,application/json" hidden>
@@ -646,6 +700,8 @@
     </header>
 
     <div class="top-rule"></div>
+
+    <section class="top-subjects" id="topSubjects" aria-label="Asignaturas y periodos visibles" hidden></section>
 
     <section class="months" id="months"></section>
 
@@ -749,6 +805,8 @@
     toMonth: document.getElementById("toMonth"),
     title: document.getElementById("title"),
     edition: document.getElementById("edition"),
+    showTopSubjects: document.getElementById("showTopSubjects"),
+    topSubjects: document.getElementById("topSubjects"),
     titleOut: document.getElementById("titleOut"),
     editionOut: document.getElementById("editionOut"),
     months: document.getElementById("months"),
@@ -873,6 +931,26 @@
       box.appendChild(days);
       els.months.appendChild(box);
     }
+  }
+
+  function renderTopSubjects(){
+    const visibleSubjects = state.subjects.filter(subject => !subject.hidden);
+    els.topSubjects.hidden = !els.showTopSubjects.checked || visibleSubjects.length === 0;
+    els.topSubjects.innerHTML = "";
+
+    if(els.topSubjects.hidden) return;
+
+    visibleSubjects.forEach(subject => {
+      const item = document.createElement("div");
+      item.className = "top-subject-item";
+      const swatch = document.createElement("span");
+      swatch.className = "top-subject-swatch";
+      swatch.style.backgroundColor = subject.color;
+      const name = document.createElement("span");
+      name.textContent = subject.name;
+      item.append(swatch, name);
+      els.topSubjects.appendChild(item);
+    });
   }
 
   function renderPalette(){
@@ -1000,6 +1078,7 @@
     }
     renderSwapControls();
     renderLegend();
+    renderTopSubjects();
   }
 
   function updateCommentButton(button, subject){
@@ -1191,7 +1270,8 @@
         fromMonth: parseInt(els.fromMonth.value, 10),
         toMonth: parseInt(els.toMonth.value, 10),
         title: els.title.value,
-        edition: els.edition.value
+        edition: els.edition.value,
+        showTopSubjects: Boolean(els.showTopSubjects.checked)
       },
       subjects: state.subjects.map(subject => ({
         id: subject.id,
@@ -1276,7 +1356,8 @@
         fromMonth,
         toMonth,
         title: String(data.calendar.title ?? ""),
-        edition: String(data.calendar.edition ?? "")
+        edition: String(data.calendar.edition ?? ""),
+        showTopSubjects: Boolean(data.calendar.showTopSubjects)
       },
       subjects,
       marks
@@ -1296,6 +1377,7 @@
       els.toMonth.value = String(loaded.calendar.toMonth);
       els.title.value = loaded.calendar.title;
       els.edition.value = loaded.calendar.edition;
+      els.showTopSubjects.checked = loaded.calendar.showTopSubjects;
 
       state.subjects = loaded.subjects;
       state.marks = loaded.marks;
@@ -1315,6 +1397,7 @@
   [els.year, els.fromMonth, els.toMonth].forEach(el => el.addEventListener("change", renderCalendar));
   els.title.addEventListener("input", () => els.titleOut.textContent = els.title.value || "Título");
   els.edition.addEventListener("input", () => els.editionOut.textContent = els.edition.value || "EDICIÓN");
+  els.showTopSubjects.addEventListener("change", renderTopSubjects);
   els.addSubject.addEventListener("click", addSubject);
   els.cancelCommentBtn.addEventListener("click", closeCommentEditor);
   els.saveCommentBtn.addEventListener("click", saveComment);
