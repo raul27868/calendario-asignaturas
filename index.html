@@ -12,7 +12,7 @@
     --paper:#ffffff;
     --panel:#f7f8fa;
     --border:#dfe3e8;
-    --weekend:#ff6f2c;a
+    --weekend:#ff6f2c;
     --accent:#2457c5;
   }
 
@@ -220,6 +220,12 @@
     font-size:15px;
     transition:transform .04s ease, box-shadow .12s ease;
   }
+  .day-number sup{
+    font-size:.65em;
+    font-weight:700;
+    line-height:0;
+    vertical-align:super;
+  }
   .day:hover:not(.blank){
     border-color:rgba(0,0,0,.18);
     box-shadow:0 1px 4px rgba(0,0,0,.12);
@@ -252,6 +258,17 @@
     gap:9px;
     align-items:flex-start;
   }
+  .exam-legend{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 18px;
+    padding:4px 28px 8px;
+    color:#555b62;
+    font-size:12px;
+    font-weight:600;
+  }
+  .exam-legend[hidden]{display:none}
+  .exam-legend-item{white-space:nowrap}
   .swatch{
     width:12px;
     height:12px;
@@ -275,6 +292,12 @@
     margin:0 0 16px;
     color:#62676e;
     font-size:14px;
+  }
+  .day-mode-controls{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-bottom:16px;
   }
 
   .add-row{
@@ -613,6 +636,10 @@
       line-height:1 !important;
     }
 
+    .day-number sup{
+      font-size:.7em !important;
+    }
+
     .day[data-active="true"]::after{
       display:none !important;
     }
@@ -631,6 +658,12 @@
       gap:2mm !important;
       break-inside:avoid !important;
       page-break-inside:avoid !important;
+    }
+
+    .exam-legend{
+      gap:1.5mm 4mm !important;
+      padding:1mm 3mm 0 !important;
+      font-size:7pt !important;
     }
 
     .legend-item.subject-hidden{
@@ -708,6 +741,7 @@
     <div class="bottom-rule"></div>
 
     <section class="legend" id="legend"></section>
+    <section class="exam-legend" id="examLegend" aria-label="Leyenda de convocatorias" hidden></section>
   </main>
 
   <section class="editor">
@@ -716,6 +750,11 @@
       Añade una asignatura o periodo, selecciónalo y después pulsa sobre los días del calendario.
       Si pulsas un día que ya tiene el color activo, se desmarca. Si tenía otro color, se sustituye por el activo.
     </p>
+    <div class="day-mode-controls" role="group" aria-label="Modo de marcado de días">
+      <button class="btn primary" type="button" data-day-mode="calendar" aria-pressed="true">Calendario</button>
+      <button class="btn" type="button" data-day-mode="exam1" aria-pressed="false">Examen *</button>
+      <button class="btn" type="button" data-day-mode="exam2" aria-pressed="false">Examen **</button>
+    </div>
 
     <div class="add-row">
       <div class="field">
@@ -809,6 +848,8 @@
     subjects: [],
     activeId: null,
     marks: {},
+    exams: {},
+    dayMode: "calendar",
     selectedColor: PALETTE[0],
     commentSubjectId: null,
     commentReturnFocus: null
@@ -826,6 +867,8 @@
     editionOut: document.getElementById("editionOut"),
     months: document.getElementById("months"),
     legend: document.getElementById("legend"),
+    examLegend: document.getElementById("examLegend"),
+    dayModeButtons: Array.from(document.querySelectorAll("[data-day-mode]")),
     palette: document.getElementById("palette"),
     newName: document.getElementById("newName"),
     addSubject: document.getElementById("addSubject"),
@@ -923,7 +966,10 @@
       for(let day=1; day<=total; day++){
         const el = document.createElement("div");
         el.className = "day";
-        el.textContent = day;
+        const number = document.createElement("span");
+        number.className = "day-number";
+        number.textContent = day;
+        el.appendChild(number);
 
         const jsDay = new Date(monthYear, month, day).getDay();
         if(jsDay === 0 || jsDay === 6) el.classList.add("weekend");
@@ -934,11 +980,19 @@
         const subjectId = state.marks[key];
         const subject = getSubject(subjectId);
         if(subject){
-          el.title = key + " — " + subject.name + (subject.hidden ? " (oculto)" : "");
+          const exam = state.exams[key];
+          const hasExam = exam === 1 || exam === 2;
+          el.title = key + " — " + subject.name + (subject.hidden ? " (oculto)" : "") +
+            (hasExam ? " — " + (exam === 1 ? "1ª" : "2ª") + " convocatoria" : "");
           if(!subject.hidden){
             el.style.backgroundColor = subject.color;
             el.classList.add("painted");
             if(subject.id === state.activeId) el.dataset.active = "true";
+            if(hasExam){
+              const marker = document.createElement("sup");
+              marker.textContent = exam === 1 ? "*" : "**";
+              number.appendChild(marker);
+            }
           }
         }else{
           el.title = key;
@@ -1080,7 +1134,10 @@
         del.addEventListener("click", () => {
           if(!confirm('¿Eliminar "' + subject.name + '" y sus días marcados?')) return;
           Object.keys(state.marks).forEach(k => {
-            if(state.marks[k] === subject.id) delete state.marks[k];
+            if(state.marks[k] === subject.id){
+              delete state.marks[k];
+              delete state.exams[k];
+            }
           });
           state.subjects = state.subjects.filter(s => s.id !== subject.id);
           if(state.activeId === subject.id){
@@ -1100,6 +1157,7 @@
     renderCalendarSwapControls();
     renderLegend();
     renderTopSubjects();
+    renderExamLegend();
   }
 
   function updateCommentButton(button, subject){
@@ -1266,13 +1324,51 @@
     });
   }
 
+  function renderExamLegend(){
+    const hasVisibleExam = Object.entries(state.exams).some(([date, exam]) => {
+      const subject = getSubject(state.marks[date]);
+      return (exam === 1 || exam === 2) && subject && !subject.hidden;
+    });
+    els.examLegend.hidden = !hasVisibleExam;
+    els.examLegend.innerHTML = "";
+    if(!hasVisibleExam) return;
+
+    [
+      ["*", "1ª convocatoria"],
+      ["**", "2ª convocatoria"]
+    ].forEach(([marker, description]) => {
+      const item = document.createElement("span");
+      item.className = "exam-legend-item";
+      item.textContent = marker + " " + description;
+      els.examLegend.appendChild(item);
+    });
+  }
+
   function toggleDay(key){
+    if(state.dayMode === "exam1" || state.dayMode === "exam2"){
+      if(!Object.prototype.hasOwnProperty.call(state.marks, key)){
+        alert("Este día no tiene ninguna asignatura o periodo asociado. Asigna primero la asignatura.");
+        return;
+      }
+
+      const exam = state.dayMode === "exam1" ? 1 : 2;
+      if(state.exams[key] === exam){
+        delete state.exams[key];
+      }else{
+        state.exams[key] = exam;
+      }
+      renderCalendar();
+      renderExamLegend();
+      return;
+    }
+
     if(!state.activeId){
       alert("Primero selecciona una asignatura o periodo.");
       return;
     }
     if(state.marks[key] === state.activeId){
       delete state.marks[key];
+      delete state.exams[key];
     }else{
       state.marks[key] = state.activeId;
     }
@@ -1357,7 +1453,8 @@
         comment: subject.comment || "",
         hidden: Boolean(subject.hidden)
       })),
-      marks: {...state.marks}
+      marks: {...state.marks},
+      exams: {...state.exams}
     };
 
     const suggested = suggestedCalendarFilename();
@@ -1427,6 +1524,29 @@
       marks[date] = String(subjectId);
     }
 
+    if(data.exams !== undefined &&
+       (!data.exams || typeof data.exams !== "object" || Array.isArray(data.exams))){
+      throw new Error("La lista de fechas de examen no es válida.");
+    }
+    const exams = {};
+    for(const [date, exam] of Object.entries(data.exams ?? {})){
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){
+        throw new Error("Fecha inválida en exámenes: " + date);
+      }
+      const parsed = new Date(date + "T00:00:00");
+      if(Number.isNaN(parsed.getTime()) || parsed.getFullYear() !== Number(date.slice(0,4)) ||
+         parsed.getMonth() + 1 !== Number(date.slice(5,7)) || parsed.getDate() !== Number(date.slice(8,10))){
+        throw new Error("Fecha inexistente en exámenes: " + date);
+      }
+      if(!Object.prototype.hasOwnProperty.call(marks, date)){
+        throw new Error("Existe una fecha de examen sin asignatura asociada: " + date);
+      }
+      if(exam !== 1 && exam !== 2){
+        throw new Error("La convocatoria debe ser 1 o 2: " + date);
+      }
+      exams[date] = exam;
+    }
+
     return {
       calendar: {
         year,
@@ -1437,7 +1557,8 @@
         showTopSubjects: Boolean(data.calendar.showTopSubjects)
       },
       subjects,
-      marks
+      marks,
+      exams
     };
   }
 
@@ -1458,6 +1579,7 @@
 
       state.subjects = loaded.subjects;
       state.marks = loaded.marks;
+      state.exams = loaded.exams;
       state.activeId = state.subjects[0]?.id ?? null;
       if(state.subjects[0]) state.selectedColor = state.subjects[0].color;
 
@@ -1475,6 +1597,16 @@
   els.title.addEventListener("input", () => els.titleOut.textContent = els.title.value || "Título");
   els.edition.addEventListener("input", () => els.editionOut.textContent = els.edition.value || "EDICIÓN");
   els.showTopSubjects.addEventListener("change", renderTopSubjects);
+  els.dayModeButtons.forEach(button => {
+    button.addEventListener("click", () => {
+      state.dayMode = button.dataset.dayMode;
+      els.dayModeButtons.forEach(modeButton => {
+        const selected = modeButton === button;
+        modeButton.classList.toggle("primary", selected);
+        modeButton.setAttribute("aria-pressed", String(selected));
+      });
+    });
+  });
   els.addSubject.addEventListener("click", addSubject);
   els.cancelCommentBtn.addEventListener("click", closeCommentEditor);
   els.saveCommentBtn.addEventListener("click", saveComment);
