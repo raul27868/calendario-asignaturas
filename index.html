@@ -379,6 +379,7 @@
   }
   .subject-actions{
     display:flex;
+    flex-wrap:wrap;
     align-items:center;
     gap:8px;
   }
@@ -444,6 +445,70 @@
     box-shadow:0 0 0 100vmax rgba(22,28,36,.48),0 16px 48px rgba(0,0,0,.2);
   }
 
+  .sessions-dialog{
+    width:min(980px,calc(100vw - 32px));
+    max-width:none;
+    max-height:calc(100vh - 32px);
+    overflow:auto;
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:22px;
+    color:var(--ink);
+    box-shadow:0 16px 48px rgba(0,0,0,.2);
+  }
+  .sessions-dialog::backdrop{background:rgba(22,28,36,.48)}
+  .sessions-dialog.fallback-modal{
+    position:fixed;
+    inset:16px;
+    margin:auto;
+    z-index:100;
+    box-shadow:0 0 0 100vmax rgba(22,28,36,.48),0 16px 48px rgba(0,0,0,.2);
+  }
+  .sessions-header h2{
+    margin:0 0 16px;
+    font-size:20px;
+  }
+  .sessions-table-wrap{
+    width:100%;
+    overflow-x:auto;
+  }
+  .sessions-table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14px;
+  }
+  .sessions-table th,
+  .sessions-table td{
+    border:1px solid #cfd4da;
+    padding:9px 10px;
+    text-align:left;
+    vertical-align:top;
+  }
+  .sessions-table th{
+    background:#f1f3f5;
+    font-weight:700;
+  }
+  .sessions-table th:nth-child(1){width:18%}
+  .sessions-table th:nth-child(2){width:16%}
+  .sessions-table th:nth-child(3){width:24%}
+  .sessions-table th:nth-child(4){width:42%}
+  .sessions-empty{
+    margin:0 0 12px;
+    color:#62676e;
+  }
+  .sessions-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+    margin-top:16px;
+  }
+  .sessions-copy-status{
+    min-height:1.3em;
+    margin:10px 0 0;
+    color:#62676e;
+    font-size:13px;
+  }
+
   .swap-action-row{
     margin-top:18px;
   }
@@ -493,6 +558,10 @@
   }
 
   @media print{
+    .sessions-dialog{
+      display:none !important;
+    }
+
     @page{
       size:A4 portrait;
       margin:8mm;
@@ -812,6 +881,17 @@
     </dialog>
   </section>
 </div>
+<dialog class="sessions-dialog" id="sessionsDialog" aria-labelledby="sessionsTitle" aria-modal="true">
+  <header class="sessions-header">
+    <h2 id="sessionsTitle"></h2>
+  </header>
+  <div class="sessions-table-wrap" id="sessionsTableWrap"></div>
+  <p class="sessions-copy-status" id="sessionsCopyStatus" aria-live="polite"></p>
+  <div class="sessions-actions">
+    <button class="btn primary" id="copySessionsBtn" type="button">Copiar tabla</button>
+    <button class="btn" id="closeSessionsBtn" type="button">Cerrar</button>
+  </div>
+</dialog>
 
 <script>
 (() => {
@@ -854,6 +934,7 @@
     commentSubjectId: null,
     commentReturnFocus: null
   };
+  let sessionsReturnFocus = null;
 
   const els = {
     year: document.getElementById("year"),
@@ -876,6 +957,12 @@
     commentDialog: document.getElementById("commentDialog"),
     commentDialogTitle: document.getElementById("commentDialogTitle"),
     commentText: document.getElementById("commentText"),
+    sessionsDialog: document.getElementById("sessionsDialog"),
+    sessionsTitle: document.getElementById("sessionsTitle"),
+    sessionsTableWrap: document.getElementById("sessionsTableWrap"),
+    sessionsCopyStatus: document.getElementById("sessionsCopyStatus"),
+    copySessionsBtn: document.getElementById("copySessionsBtn"),
+    closeSessionsBtn: document.getElementById("closeSessionsBtn"),
     cancelCommentBtn: document.getElementById("cancelCommentBtn"),
     saveCommentBtn: document.getElementById("saveCommentBtn"),
     toggleSwapBtn: document.getElementById("toggleSwapBtn"),
@@ -1146,9 +1233,16 @@
           renderAll();
         });
 
+        const sessions = document.createElement("button");
+        sessions.type = "button";
+        sessions.className = "icon-btn";
+        sessions.textContent = "Sesiones";
+        sessions.setAttribute("aria-label", "Ver sesiones de " + subject.name);
+        sessions.addEventListener("click", () => openSessionsDialog(subject, sessions));
+
         const actions = document.createElement("div");
         actions.className = "subject-actions";
-        actions.append(visibility, comment, rename, del);
+        actions.append(visibility, comment, rename, del, sessions);
         row.append(radio, mini, name, actions);
         els.subjects.appendChild(row);
       });
@@ -1158,6 +1252,152 @@
     renderLegend();
     renderTopSubjects();
     renderExamLegend();
+  }
+
+  function formatSessionDate(date){
+    return date.slice(8,10) + "/" + date.slice(5,7) + "/" + date.slice(2,4);
+  }
+
+  function openSessionsDialog(subject, button){
+    sessionsReturnFocus = button;
+    const title = subject.name + " — " + els.year.value + " / " + els.edition.value;
+    els.sessionsTitle.textContent = title;
+    els.sessionsCopyStatus.textContent = "";
+    els.sessionsTableWrap.innerHTML = "";
+
+    const dates = Object.entries(state.marks)
+      .filter(([, subjectId]) => subjectId === subject.id)
+      .map(([date]) => date)
+      .sort();
+    let sessionNumber = 0;
+
+    const table = document.createElement("table");
+    table.className = "sessions-table";
+    const thead = document.createElement("thead");
+    const headerRow = document.createElement("tr");
+    ["Sesión", "Fecha", "Hora", "Observaciones"].forEach(label => {
+      const th = document.createElement("th");
+      th.scope = "col";
+      th.textContent = label;
+      headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+    dates.forEach(date => {
+      const examType = state.exams[date];
+      let label;
+      if(examType === 1){
+        label = "Examen 1ª conv.";
+      }else if(examType === 2){
+        label = "Examen 2ª conv.";
+      }else{
+        sessionNumber += 1;
+        label = "SESIÓN " + sessionNumber;
+      }
+
+      const row = document.createElement("tr");
+      [label, formatSessionDate(date), "20:00 a 22:00", ""].forEach(value => {
+        const cell = document.createElement("td");
+        cell.textContent = value;
+        row.appendChild(cell);
+      });
+      tbody.appendChild(row);
+    });
+    table.appendChild(tbody);
+
+    if(dates.length === 0){
+      const empty = document.createElement("p");
+      empty.className = "sessions-empty";
+      empty.textContent = "Esta asignatura no tiene sesiones asignadas.";
+      els.sessionsTableWrap.appendChild(empty);
+    }
+    els.sessionsTableWrap.appendChild(table);
+
+    if(typeof els.sessionsDialog.showModal === "function"){
+      els.sessionsDialog.classList.remove("fallback-modal");
+      els.sessionsDialog.showModal();
+    }else{
+      els.sessionsDialog.classList.add("fallback-modal");
+      els.sessionsDialog.setAttribute("open", "");
+    }
+  }
+
+  function closeSessionsDialog(){
+    if(typeof els.sessionsDialog.close === "function"){
+      els.sessionsDialog.close();
+    }else{
+      els.sessionsDialog.removeAttribute("open");
+      els.sessionsDialog.classList.remove("fallback-modal");
+      restoreSessionsFocus();
+    }
+  }
+
+  function restoreSessionsFocus(){
+    sessionsReturnFocus?.focus();
+    sessionsReturnFocus = null;
+  }
+
+  async function copySessionsTable(){
+    const table = els.sessionsTableWrap.querySelector(".sessions-table");
+    const title = els.sessionsTitle.textContent;
+    const wrapper = document.createElement("div");
+    const heading = document.createElement("p");
+    heading.textContent = title;
+    wrapper.appendChild(heading);
+    if(els.sessionsTableWrap.querySelector(".sessions-empty")){
+      const empty = document.createElement("p");
+      empty.textContent = "Esta asignatura no tiene sesiones asignadas.";
+      wrapper.appendChild(empty);
+    }
+    wrapper.appendChild(table.cloneNode(true));
+
+    const plainRows = Array.from(table.rows, row =>
+      Array.from(row.cells, cell => cell.textContent).join("\t")
+    );
+    const plainText = [title, "", ...plainRows].join("\n");
+    const html = wrapper.innerHTML;
+    let clipboardWriteFailed = false;
+
+    try{
+      if(navigator.clipboard?.write && typeof ClipboardItem !== "undefined"){
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html": new Blob([html], {type:"text/html"}),
+            "text/plain": new Blob([plainText], {type:"text/plain"})
+          })
+        ]);
+        els.sessionsCopyStatus.textContent = "Tabla copiada.";
+        return;
+      }
+    }catch{
+      clipboardWriteFailed = true;
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = plainText;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    let copied = false;
+    try{
+      copied = document.execCommand("copy");
+    }catch(error){
+      els.sessionsCopyStatus.textContent = "No se pudo copiar automáticamente. Selecciona la tabla para copiarla manualmente.";
+    }finally{
+      textarea.remove();
+    }
+    if(!copied){
+      els.sessionsCopyStatus.textContent = "No se pudo copiar automáticamente. Selecciona la tabla para copiarla manualmente.";
+    }
+    if(copied){
+      els.sessionsCopyStatus.textContent = clipboardWriteFailed
+        ? "No se pudo conservar el formato; se copió el texto."
+        : "Tabla copiada como texto. También puedes seleccionar la tabla manualmente.";
+    }
   }
 
   function updateCommentButton(button, subject){
@@ -1636,6 +1876,12 @@
       event.preventDefault();
       first.focus();
     }
+  });
+  els.closeSessionsBtn.addEventListener("click", closeSessionsDialog);
+  els.copySessionsBtn.addEventListener("click", copySessionsTable);
+  els.sessionsDialog.addEventListener("close", restoreSessionsFocus);
+  els.sessionsDialog.addEventListener("click", event => {
+    if(event.target === els.sessionsDialog) closeSessionsDialog();
   });
   els.toggleSwapBtn.addEventListener("click", () => {
     const opening = els.swapControls.hidden;
