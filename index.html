@@ -731,8 +731,8 @@
       <button class="btn primary" id="addSubject" type="button">Añadir</button>
     </div>
 
-    <div class="swap-action-row">
-      <button class="btn" id="toggleSwapBtn" type="button" aria-expanded="false" aria-controls="swapControls" disabled>Intercambiar colores</button>
+    <div class="swap-action-row" hidden>
+      <button class="btn" id="toggleSwapBtn" type="button" aria-expanded="false" aria-controls="swapControls" disabled hidden>Intercambiar colores</button>
     </div>
     <div class="swap-controls" id="swapControls" hidden>
       <div class="field">
@@ -744,6 +744,21 @@
         <select id="swapSubjectB"></select>
       </div>
       <button class="btn primary" id="confirmSwapBtn" type="button">Intercambiar</button>
+    </div>
+
+    <div class="swap-action-row">
+      <button class="btn" id="toggleCalendarSwapBtn" type="button" aria-expanded="false" aria-controls="calendarSwapControls" disabled>Intercambiar calendario</button>
+    </div>
+    <div class="swap-controls" id="calendarSwapControls" hidden>
+      <div class="field">
+        <label for="calendarSwapSubjectA">Primera asignatura/periodo</label>
+        <select id="calendarSwapSubjectA"></select>
+      </div>
+      <div class="field">
+        <label for="calendarSwapSubjectB">Segunda asignatura/periodo</label>
+        <select id="calendarSwapSubjectB"></select>
+      </div>
+      <button class="btn primary" id="confirmCalendarSwapBtn" type="button">Intercambiar calendario</button>
     </div>
 
     <div class="subjects" id="subjects"></div>
@@ -825,6 +840,11 @@
     swapSubjectA: document.getElementById("swapSubjectA"),
     swapSubjectB: document.getElementById("swapSubjectB"),
     confirmSwapBtn: document.getElementById("confirmSwapBtn"),
+    toggleCalendarSwapBtn: document.getElementById("toggleCalendarSwapBtn"),
+    calendarSwapControls: document.getElementById("calendarSwapControls"),
+    calendarSwapSubjectA: document.getElementById("calendarSwapSubjectA"),
+    calendarSwapSubjectB: document.getElementById("calendarSwapSubjectB"),
+    confirmCalendarSwapBtn: document.getElementById("confirmCalendarSwapBtn"),
     status: document.getElementById("status"),
     loadCalendarBtn: document.getElementById("loadCalendarBtn"),
     calendarFileInput: document.getElementById("calendarFileInput"),
@@ -1077,6 +1097,7 @@
       });
     }
     renderSwapControls();
+    renderCalendarSwapControls();
     renderLegend();
     renderTopSubjects();
   }
@@ -1170,6 +1191,62 @@
     els.swapControls.hidden = true;
     els.toggleSwapBtn.setAttribute("aria-expanded", "false");
     renderAll();
+  }
+
+  function renderCalendarSwapControls(){
+    const firstSelect = els.calendarSwapSubjectA;
+    const secondSelect = els.calendarSwapSubjectB;
+    const previousA = firstSelect.value;
+    const previousB = secondSelect.value;
+    const available = new Set(state.subjects.map(subject => subject.id));
+
+    [firstSelect, secondSelect].forEach(select => {
+      select.innerHTML = "";
+      state.subjects.forEach(subject => {
+        const option = document.createElement("option");
+        option.value = subject.id;
+        option.textContent = subject.name;
+        select.appendChild(option);
+      });
+    });
+
+    const firstId = available.has(previousA) ? previousA : state.subjects[0]?.id;
+    const secondId = available.has(previousB) && previousB !== firstId
+      ? previousB
+      : state.subjects.find(subject => subject.id !== firstId)?.id;
+    if(firstId) firstSelect.value = firstId;
+    if(secondId) secondSelect.value = secondId;
+
+    Array.from(firstSelect.options).forEach(option => {
+      option.disabled = option.value === secondSelect.value;
+    });
+    Array.from(secondSelect.options).forEach(option => {
+      option.disabled = option.value === firstSelect.value;
+    });
+    els.toggleCalendarSwapBtn.disabled = state.subjects.length < 2;
+  }
+
+  function swapSubjectCalendars(){
+    const first = getSubject(els.calendarSwapSubjectA.value);
+    const second = getSubject(els.calendarSwapSubjectB.value);
+    if(!first || !second || first.id === second.id){
+      alert("Selecciona dos asignaturas o periodos diferentes.");
+      return;
+    }
+    if(!confirm('¿Intercambiar todos los días de "' + first.name + '" y "' + second.name + '"?')) return;
+
+    for(const date of Object.keys(state.marks)){
+      if(state.marks[date] === first.id){
+        state.marks[date] = second.id;
+      }else if(state.marks[date] === second.id){
+        state.marks[date] = first.id;
+      }
+    }
+
+    els.calendarSwapControls.hidden = true;
+    els.toggleCalendarSwapBtn.setAttribute("aria-expanded", "false");
+    renderCalendar();
+    renderSubjects();
   }
 
   function renderLegend(){
@@ -1434,6 +1511,14 @@
     els.toggleSwapBtn.setAttribute("aria-expanded", String(opening));
   });
   els.confirmSwapBtn.addEventListener("click", swapSubjectColors);
+  els.toggleCalendarSwapBtn.addEventListener("click", () => {
+    const opening = els.calendarSwapControls.hidden;
+    els.calendarSwapControls.hidden = !opening;
+    els.toggleCalendarSwapBtn.setAttribute("aria-expanded", String(opening));
+  });
+  els.calendarSwapSubjectA.addEventListener("change", renderCalendarSwapControls);
+  els.calendarSwapSubjectB.addEventListener("change", renderCalendarSwapControls);
+  els.confirmCalendarSwapBtn.addEventListener("click", swapSubjectCalendars);
   els.newName.addEventListener("keydown", e => {
     if(e.key === "Enter") addSubject();
   });
