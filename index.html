@@ -583,6 +583,10 @@
       page-break-inside:avoid !important;
     }
 
+    .legend-item.subject-hidden{
+      display:none !important;
+    }
+
     .swatch{
       width:2.6mm !important;
       height:2.6mm !important;
@@ -1094,6 +1098,8 @@
     state.subjects.forEach(subject => {
       const item = document.createElement("div");
       item.className = "legend-item";
+      item.dataset.subjectId = subject.id;
+      if(subject.hidden) item.classList.add("subject-hidden");
       const sw = document.createElement("span");
       sw.className = "swatch";
       sw.style.background = subject.color;
