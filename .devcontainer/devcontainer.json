@@ -12,7 +12,10 @@
     "vscode": {
       "extensions": [
         "ritwickdey.LiveServer"
-      ]
+      ],
+      "settings": {
+        "liveServer.settings.port": 8000
+      }
     }
   }
 }

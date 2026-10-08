@@ -290,7 +290,7 @@
   }
   .subject{
     display:grid;
-    grid-template-columns:auto 22px 1fr auto auto;
+    grid-template-columns:auto 22px 1fr auto;
     gap:10px;
     align-items:center;
     padding:10px 12px;
@@ -316,6 +316,11 @@
     color:#697078;
     font-size:12px;
   }
+  .subject-actions{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
   .icon-btn{
     border:1px solid #d8dde2;
     background:white;
@@ -324,6 +329,59 @@
     cursor:pointer;
   }
   .icon-btn:hover{background:#f1f3f5}
+  .comment-btn{background:#f1f3f5}
+  .comment-btn.has-comment{
+    background:#e8f0fe;
+    border-color:#9bbcf6;
+    color:#174ea6;
+  }
+  .comment-btn.has-comment:hover{background:#d9e7fd}
+  .comment-btn:focus-visible{
+    outline:2px solid #2457c5;
+    outline-offset:2px;
+  }
+
+  .comment-dialog{
+    width:min(560px,calc(100vw - 32px));
+    max-width:none;
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:22px;
+    color:var(--ink);
+    box-shadow:0 16px 48px rgba(0,0,0,.2);
+  }
+  .comment-dialog::backdrop{background:rgba(22,28,36,.48)}
+  .comment-dialog h2{
+    margin:0 0 14px;
+    font-size:20px;
+  }
+  .comment-dialog textarea{
+    display:block;
+    width:100%;
+    min-height:180px;
+    resize:vertical;
+    padding:10px 12px;
+    border:1px solid #cfd4da;
+    border-radius:8px;
+    line-height:1.5;
+  }
+  .comment-dialog textarea:focus-visible{
+    outline:2px solid #2457c5;
+    outline-offset:1px;
+  }
+  .comment-dialog-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+    margin-top:14px;
+  }
+  .comment-dialog.fallback-modal{
+    position:fixed;
+    inset:0;
+    margin:auto;
+    z-index:100;
+    box-shadow:0 0 0 100vmax rgba(22,28,36,.48),0 16px 48px rgba(0,0,0,.2);
+  }
 
   .swap-action-row{
     margin-top:18px;
@@ -369,6 +427,8 @@
     .legend{grid-template-columns:1fr 1fr;padding:10px 0}
     .add-row{grid-template-columns:1fr}
     .swap-controls{grid-template-columns:1fr}
+    .subject{grid-template-columns:auto 22px minmax(0,1fr)}
+    .subject-actions{grid-column:1 / -1;justify-self:end}
   }
 
   @media print{
@@ -624,6 +684,14 @@
 
     <div class="subjects" id="subjects"></div>
     <div class="status" id="status">No hay ninguna asignatura/periodo seleccionado.</div>
+    <dialog class="comment-dialog" id="commentDialog" aria-labelledby="commentDialogTitle" aria-modal="true">
+      <h2 id="commentDialogTitle"></h2>
+      <textarea id="commentText" aria-label="Comentario de la asignatura o periodo" rows="8"></textarea>
+      <div class="comment-dialog-actions">
+        <button class="btn" id="cancelCommentBtn" type="button">Cancelar</button>
+        <button class="btn primary" id="saveCommentBtn" type="button">Guardar</button>
+      </div>
+    </dialog>
   </section>
 </div>
 
@@ -662,7 +730,9 @@
     subjects: [],
     activeId: null,
     marks: {},
-    selectedColor: PALETTE[0]
+    selectedColor: PALETTE[0],
+    commentSubjectId: null,
+    commentReturnFocus: null
   };
 
   const els = {
@@ -679,6 +749,11 @@
     newName: document.getElementById("newName"),
     addSubject: document.getElementById("addSubject"),
     subjects: document.getElementById("subjects"),
+    commentDialog: document.getElementById("commentDialog"),
+    commentDialogTitle: document.getElementById("commentDialogTitle"),
+    commentText: document.getElementById("commentText"),
+    cancelCommentBtn: document.getElementById("cancelCommentBtn"),
+    saveCommentBtn: document.getElementById("saveCommentBtn"),
     toggleSwapBtn: document.getElementById("toggleSwapBtn"),
     swapControls: document.getElementById("swapControls"),
     swapSubjectA: document.getElementById("swapSubjectA"),
@@ -855,6 +930,13 @@
         countLine.textContent = count + " día" + (count===1 ? "" : "s") + " marcado" + (count===1 ? "" : "s");
         name.append(title, countLine);
 
+        const comment = document.createElement("button");
+        comment.type = "button";
+        comment.className = "icon-btn comment-btn";
+        comment.textContent = "Comentario";
+        updateCommentButton(comment, subject);
+        comment.addEventListener("click", () => openCommentEditor(subject, comment));
+
         const rename = document.createElement("button");
         rename.type = "button";
         rename.className = "icon-btn";
@@ -883,12 +965,67 @@
           renderAll();
         });
 
-        row.append(radio, mini, name, rename, del);
+        const actions = document.createElement("div");
+        actions.className = "subject-actions";
+        actions.append(comment, rename, del);
+        row.append(radio, mini, name, actions);
         els.subjects.appendChild(row);
       });
     }
     renderSwapControls();
     renderLegend();
+  }
+
+  function updateCommentButton(button, subject){
+    const hasComment = String(subject.comment ?? "").trim() !== "";
+    button.classList.toggle("has-comment", hasComment);
+    button.setAttribute(
+      "aria-label",
+      (hasComment ? "Editar comentario de " : "Añadir comentario a ") + subject.name
+    );
+    button.title = hasComment ? "Comentario guardado" : "Sin comentario";
+  }
+
+  function openCommentEditor(subject, button){
+    state.commentSubjectId = subject.id;
+    state.commentReturnFocus = button;
+    els.commentDialogTitle.textContent = "Comentario — " + subject.name;
+    els.commentText.value = subject.comment ?? "";
+
+    if(typeof els.commentDialog.showModal === "function"){
+      els.commentDialog.classList.remove("fallback-modal");
+      els.commentDialog.showModal();
+    }else{
+      els.commentDialog.classList.add("fallback-modal");
+      els.commentDialog.setAttribute("open", "");
+    }
+    els.commentText.focus();
+  }
+
+  function closeCommentEditor(){
+    if(typeof els.commentDialog.close === "function"){
+      els.commentDialog.close();
+    }else{
+      els.commentDialog.removeAttribute("open");
+      els.commentDialog.classList.remove("fallback-modal");
+      restoreCommentFocus();
+    }
+  }
+
+  function restoreCommentFocus(){
+    state.commentSubjectId = null;
+    state.commentReturnFocus?.focus();
+    state.commentReturnFocus = null;
+  }
+
+  function saveComment(){
+    const subject = getSubject(state.commentSubjectId);
+    if(!subject) return;
+
+    subject.comment = els.commentText.value;
+    const button = state.commentReturnFocus;
+    if(button) updateCommentButton(button, subject);
+    closeCommentEditor();
   }
 
   function renderSwapControls(){
@@ -977,7 +1114,7 @@
       return;
     }
     const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random();
-    state.subjects.push({id,name,color:state.selectedColor});
+    state.subjects.push({id,name,color:state.selectedColor,comment:""});
     state.activeId = id;
     els.newName.value = "";
     renderAll();
@@ -1031,7 +1168,8 @@
       subjects: state.subjects.map(subject => ({
         id: subject.id,
         name: subject.name,
-        color: subject.color
+        color: subject.color,
+        comment: subject.comment || ""
       })),
       marks: {...state.marks}
     };
@@ -1082,7 +1220,7 @@
       if(!name) throw new Error("Hay una asignatura/periodo sin nombre.");
       if(!/^#[0-9a-f]{6}$/i.test(color)) throw new Error('Color inválido en "' + name + '".');
       ids.add(id);
-      return {id, name, color};
+      return {id, name, color, comment: String(subject.comment ?? "")};
     });
 
     const marks = {};
@@ -1143,6 +1281,35 @@
   els.title.addEventListener("input", () => els.titleOut.textContent = els.title.value || "Título");
   els.edition.addEventListener("input", () => els.editionOut.textContent = els.edition.value || "EDICIÓN");
   els.addSubject.addEventListener("click", addSubject);
+  els.cancelCommentBtn.addEventListener("click", closeCommentEditor);
+  els.saveCommentBtn.addEventListener("click", saveComment);
+  els.commentDialog.addEventListener("cancel", event => {
+    event.preventDefault();
+    closeCommentEditor();
+  });
+  els.commentDialog.addEventListener("close", restoreCommentFocus);
+  els.commentDialog.addEventListener("click", event => {
+    if(event.target === els.commentDialog) closeCommentEditor();
+  });
+  els.commentDialog.addEventListener("keydown", event => {
+    if(!els.commentDialog.classList.contains("fallback-modal")) return;
+    if(event.key === "Escape"){
+      event.preventDefault();
+      closeCommentEditor();
+      return;
+    }
+    if(event.key !== "Tab") return;
+    const focusable = Array.from(els.commentDialog.querySelectorAll("button, textarea"));
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if(event.shiftKey && document.activeElement === first){
+      event.preventDefault();
+      last.focus();
+    }else if(!event.shiftKey && document.activeElement === last){
+      event.preventDefault();
+      first.focus();
+    }
+  });
   els.toggleSwapBtn.addEventListener("click", () => {
     const opening = els.swapControls.hidden;
     els.swapControls.hidden = !opening;
@@ -1178,10 +1345,10 @@
   renderPalette();
 
   state.subjects = [
-    {id:"festivos", name:"Festivos", color:"#ff4054"},
-    {id:"nolectivo", name:"No lectivo", color:"#f39aeb"},
-    {id:"defensas", name:"Periodo Defensa TFM", color:"#c8be29"},
-    {id:"tutoria", name:"Tutoría Colectiva TFM", color:"#199be6"}
+    {id:"festivos", name:"Festivos", color:"#ff4054", comment:""},
+    {id:"nolectivo", name:"No lectivo", color:"#f39aeb", comment:""},
+    {id:"defensas", name:"Periodo Defensa TFM", color:"#c8be29", comment:""},
+    {id:"tutoria", name:"Tutoría Colectiva TFM", color:"#199be6", comment:""}
   ];
   state.activeId = "festivos";
 
