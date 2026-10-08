@@ -186,7 +186,7 @@
   }
   .month h3{
     margin:0 0 13px 0;
-    font-size:19px;
+    font-size:25px;
     font-weight:800;
   }
   .weekdays,.days{
@@ -208,17 +208,19 @@
   }
   .day{
     position:relative;
-    min-height:32px;
+    aspect-ratio:1 / 1;
+    min-height:0;
     display:flex;
     align-items:center;
     justify-content:center;
     margin:1px;
-    border-radius:2px;
+    border-radius: 9px;
     cursor:pointer;
     user-select:none;
     border:1px solid transparent;
-    font-size:15px;
+    font-size:22px;
     transition:transform .04s ease, box-shadow .12s ease;
+    width: 90%;
   }
   .day-number sup{
     font-size:1em;
@@ -732,7 +734,7 @@
 
     .month h3{
       margin:0 0 2mm 0 !important;
-      font-size:10.5pt !important;
+      font-size:25pt !important;
       line-height:1.1 !important;
     }
 
@@ -752,6 +754,7 @@
     }
 
     .day{
+      aspect-ratio:auto !important;
       min-height:4.6mm !important;
       height:4.6mm !important;
       margin:.15mm !important;
@@ -978,7 +981,7 @@
     "#a9a9a9",
     "#a68a78",
     "#199be6",
-    "#ff729e",
+    "#ff7399",
     "#0b927f",
     "#1bcfb4",
     "#ffc090",
@@ -992,6 +995,8 @@
     "#6d83ff",
     "#b5df72",
     "#f6c85f",
+    "#9c26ff",
+    "#f7bafc",
     "#9d7de3"
   ];
 
