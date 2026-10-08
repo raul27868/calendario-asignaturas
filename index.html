@@ -303,6 +303,10 @@
     box-shadow:0 0 0 1px #333 inset;
     background:#fff;
   }
+  .subject.hidden-subject .mini,
+  .subject.hidden-subject .subject-name{
+    opacity:.6;
+  }
   .subject .mini{
     width:18px;
     height:18px;
@@ -848,10 +852,12 @@
         const subjectId = state.marks[key];
         const subject = getSubject(subjectId);
         if(subject){
-          el.style.backgroundColor = subject.color;
-          el.classList.add("painted");
-          el.title = key + " — " + subject.name;
-          if(subject.id === state.activeId) el.dataset.active = "true";
+          el.title = key + " — " + subject.name + (subject.hidden ? " (oculto)" : "");
+          if(!subject.hidden){
+            el.style.backgroundColor = subject.color;
+            el.classList.add("painted");
+            if(subject.id === state.activeId) el.dataset.active = "true";
+          }
         }else{
           el.title = key;
         }
@@ -904,6 +910,7 @@
       state.subjects.forEach(subject => {
         const row = document.createElement("div");
         row.className = "subject" + (subject.id === state.activeId ? " active" : "");
+        if(subject.hidden) row.classList.add("hidden-subject");
 
         const radio = document.createElement("input");
         radio.type = "radio";
@@ -929,6 +936,21 @@
         const count = Object.values(state.marks).filter(id => id === subject.id).length;
         countLine.textContent = count + " día" + (count===1 ? "" : "s") + " marcado" + (count===1 ? "" : "s");
         name.append(title, countLine);
+
+        const visibility = document.createElement("button");
+        visibility.type = "button";
+        visibility.className = "icon-btn visibility-btn" + (subject.hidden ? " is-hidden" : "");
+        visibility.textContent = subject.hidden ? "Mostrar" : "Ocultar";
+        visibility.setAttribute(
+          "aria-label",
+          (subject.hidden ? "Mostrar días de " : "Ocultar días de ") + subject.name
+        );
+        visibility.title = subject.hidden ? "Mostrar días" : "Ocultar días";
+        visibility.addEventListener("click", () => {
+          subject.hidden = !subject.hidden;
+          renderCalendar();
+          renderSubjects();
+        });
 
         const comment = document.createElement("button");
         comment.type = "button";
@@ -967,7 +989,7 @@
 
         const actions = document.createElement("div");
         actions.className = "subject-actions";
-        actions.append(comment, rename, del);
+        actions.append(visibility, comment, rename, del);
         row.append(radio, mini, name, actions);
         els.subjects.appendChild(row);
       });
@@ -1114,7 +1136,7 @@
       return;
     }
     const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random();
-    state.subjects.push({id,name,color:state.selectedColor,comment:""});
+    state.subjects.push({id,name,color:state.selectedColor,comment:"",hidden:false});
     state.activeId = id;
     els.newName.value = "";
     renderAll();
@@ -1169,7 +1191,8 @@
         id: subject.id,
         name: subject.name,
         color: subject.color,
-        comment: subject.comment || ""
+        comment: subject.comment || "",
+        hidden: Boolean(subject.hidden)
       })),
       marks: {...state.marks}
     };
@@ -1220,7 +1243,13 @@
       if(!name) throw new Error("Hay una asignatura/periodo sin nombre.");
       if(!/^#[0-9a-f]{6}$/i.test(color)) throw new Error('Color inválido en "' + name + '".');
       ids.add(id);
-      return {id, name, color, comment: String(subject.comment ?? "")};
+      return {
+        id,
+        name,
+        color,
+        comment: String(subject.comment ?? ""),
+        hidden: Boolean(subject.hidden)
+      };
     });
 
     const marks = {};
@@ -1345,10 +1374,10 @@
   renderPalette();
 
   state.subjects = [
-    {id:"festivos", name:"Festivos", color:"#ff4054", comment:""},
-    {id:"nolectivo", name:"No lectivo", color:"#f39aeb", comment:""},
-    {id:"defensas", name:"Periodo Defensa TFM", color:"#c8be29", comment:""},
-    {id:"tutoria", name:"Tutoría Colectiva TFM", color:"#199be6", comment:""}
+    {id:"festivos", name:"Festivos", color:"#ff4054", comment:"", hidden:false},
+    {id:"nolectivo", name:"No lectivo", color:"#f39aeb", comment:"", hidden:false},
+    {id:"defensas", name:"Periodo Defensa TFM", color:"#c8be29", comment:"", hidden:false},
+    {id:"tutoria", name:"Tutoría Colectiva TFM", color:"#199be6", comment:"", hidden:false}
   ];
   state.activeId = "festivos";
 
