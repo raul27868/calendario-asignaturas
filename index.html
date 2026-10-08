@@ -221,7 +221,7 @@
     transition:transform .04s ease, box-shadow .12s ease;
   }
   .day-number sup{
-    font-size:.65em;
+    font-size:1em;
     font-weight:700;
     line-height:0;
     vertical-align:super;
@@ -706,7 +706,7 @@
     }
 
     .day-number sup{
-      font-size:.7em !important;
+      font-size:1em !important;
     }
 
     .day[data-active="true"]::after{
@@ -1095,7 +1095,10 @@
   }
 
   function renderTopSubjects(){
-    const visibleSubjects = state.subjects.filter(subject => !subject.hidden);
+    const sortedSubjects = [...state.subjects].sort((a, b) =>
+      a.name.localeCompare(b.name, "es", {sensitivity:"base"})
+    );
+    const visibleSubjects = sortedSubjects.filter(subject => !subject.hidden);
     els.topSubjects.hidden = !els.showTopSubjects.checked || visibleSubjects.length === 0;
     els.topSubjects.innerHTML = "";
 
@@ -1150,7 +1153,10 @@
       e.textContent = "Todavía no has añadido ninguna asignatura o periodo.";
       els.subjects.appendChild(e);
     }else{
-      state.subjects.forEach(subject => {
+      const sortedSubjects = [...state.subjects].sort((a, b) =>
+        a.name.localeCompare(b.name, "es", {sensitivity:"base"})
+      );
+      sortedSubjects.forEach(subject => {
         const row = document.createElement("div");
         row.className = "subject" + (subject.id === state.activeId ? " active" : "");
         if(subject.hidden) row.classList.add("hidden-subject");
