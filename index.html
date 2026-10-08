@@ -444,6 +444,61 @@
     z-index:100;
     box-shadow:0 0 0 100vmax rgba(22,28,36,.48),0 16px 48px rgba(0,0,0,.2);
   }
+  .edit-subject-dialog{
+    width:min(560px,calc(100vw - 32px));
+    max-width:none;
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:22px;
+    color:var(--ink);
+    box-shadow:0 16px 48px rgba(0,0,0,.2);
+  }
+  .edit-subject-dialog::backdrop{background:rgba(22,28,36,.48)}
+  .edit-subject-dialog.fallback-modal{
+    position:fixed;
+    inset:0;
+    margin:auto;
+    z-index:100;
+    box-shadow:0 0 0 100vmax rgba(22,28,36,.48),0 16px 48px rgba(0,0,0,.2);
+  }
+  .edit-subject-dialog h2{
+    margin:0 0 16px;
+    font-size:20px;
+  }
+  .edit-subject-name{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    margin-bottom:16px;
+    font-size:13px;
+    font-weight:700;
+  }
+  .edit-subject-name input{
+    width:100%;
+    padding:9px 10px;
+    border:1px solid #cfd4da;
+    border-radius:8px;
+    font:inherit;
+    font-weight:400;
+  }
+  .edit-color-label{
+    display:block;
+    margin-bottom:8px;
+    font-size:13px;
+    font-weight:700;
+  }
+  .edit-color-palette{
+    margin-bottom:18px;
+  }
+  .edit-color-choice[aria-pressed="true"]{
+    outline:3px solid #222;
+  }
+  .edit-subject-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+    margin-top:16px;
+  }
 
   .sessions-dialog{
     width:min(980px,calc(100vw - 32px));
@@ -559,6 +614,9 @@
 
   @media print{
     .sessions-dialog{
+      display:none !important;
+    }
+    .edit-subject-dialog{
       display:none !important;
     }
 
@@ -879,6 +937,19 @@
         <button class="btn primary" id="saveCommentBtn" type="button">Guardar</button>
       </div>
     </dialog>
+    <dialog class="edit-subject-dialog" id="editSubjectDialog" aria-labelledby="editSubjectDialogTitle" aria-modal="true">
+      <h2 id="editSubjectDialogTitle">Editar asignatura</h2>
+      <label class="edit-subject-name" for="editSubjectName">
+        Nombre
+        <input id="editSubjectName" type="text">
+      </label>
+      <span class="edit-color-label" id="editSubjectColorLabel">Color</span>
+      <div class="palette edit-color-palette" id="editSubjectPalette" role="group" aria-labelledby="editSubjectColorLabel"></div>
+      <div class="edit-subject-actions">
+        <button class="btn" id="cancelEditSubjectBtn" type="button">Cancelar</button>
+        <button class="btn primary" id="saveEditSubjectBtn" type="button">Guardar</button>
+      </div>
+    </dialog>
   </section>
 </div>
 <dialog class="sessions-dialog" id="sessionsDialog" aria-labelledby="sessionsTitle" aria-modal="true">
@@ -935,6 +1006,9 @@
     commentReturnFocus: null
   };
   let sessionsReturnFocus = null;
+  let editingSubjectId = null;
+  let editingSubjectColor = null;
+  let editSubjectReturnFocus = null;
 
   const els = {
     year: document.getElementById("year"),
@@ -957,6 +1031,11 @@
     commentDialog: document.getElementById("commentDialog"),
     commentDialogTitle: document.getElementById("commentDialogTitle"),
     commentText: document.getElementById("commentText"),
+    editSubjectDialog: document.getElementById("editSubjectDialog"),
+    editSubjectName: document.getElementById("editSubjectName"),
+    editSubjectPalette: document.getElementById("editSubjectPalette"),
+    cancelEditSubjectBtn: document.getElementById("cancelEditSubjectBtn"),
+    saveEditSubjectBtn: document.getElementById("saveEditSubjectBtn"),
     sessionsDialog: document.getElementById("sessionsDialog"),
     sessionsTitle: document.getElementById("sessionsTitle"),
     sessionsTableWrap: document.getElementById("sessionsTableWrap"),
@@ -1210,15 +1289,10 @@
 
         const rename = document.createElement("button");
         rename.type = "button";
-        rename.className = "icon-btn";
+        rename.className = "icon-btn edit-subject-btn";
         rename.textContent = "Editar";
-        rename.addEventListener("click", () => {
-          const newName = prompt("Nuevo nombre:", subject.name);
-          if(newName !== null && newName.trim()){
-            subject.name = newName.trim();
-            renderAll();
-          }
-        });
+        rename.dataset.subjectId = subject.id;
+        rename.addEventListener("click", () => openEditSubjectDialog(subject, rename));
 
         const del = document.createElement("button");
         del.type = "button";
@@ -1414,6 +1488,82 @@
       (hasComment ? "Editar comentario de " : "Añadir comentario a ") + subject.name
     );
     button.title = hasComment ? "Comentario guardado" : "Sin comentario";
+  }
+
+  function openEditSubjectDialog(subject, button){
+    editingSubjectId = subject.id;
+    editingSubjectColor = subject.color;
+    editSubjectReturnFocus = button;
+    els.editSubjectName.value = subject.name;
+    renderEditSubjectPalette();
+
+    if(typeof els.editSubjectDialog.showModal === "function"){
+      els.editSubjectDialog.classList.remove("fallback-modal");
+      els.editSubjectDialog.showModal();
+    }else{
+      els.editSubjectDialog.classList.add("fallback-modal");
+      els.editSubjectDialog.setAttribute("open", "");
+    }
+    els.editSubjectName.focus();
+    els.editSubjectName.select();
+  }
+
+  function renderEditSubjectPalette(){
+    els.editSubjectPalette.innerHTML = "";
+    const colors = [...PALETTE];
+    if(editingSubjectColor && !colors.includes(editingSubjectColor)){
+      colors.push(editingSubjectColor);
+    }
+
+    colors.forEach(color => {
+      const choice = document.createElement("button");
+      choice.type = "button";
+      choice.className = "color-choice edit-color-choice";
+      choice.style.background = color;
+      choice.title = color;
+      choice.setAttribute("aria-label", "Seleccionar color " + color);
+      choice.setAttribute("aria-pressed", String(editingSubjectColor === color));
+      choice.addEventListener("click", () => {
+        editingSubjectColor = color;
+        renderEditSubjectPalette();
+      });
+      els.editSubjectPalette.appendChild(choice);
+    });
+  }
+
+  function closeEditSubjectDialog(){
+    if(typeof els.editSubjectDialog.close === "function"){
+      els.editSubjectDialog.close();
+    }else{
+      els.editSubjectDialog.removeAttribute("open");
+      els.editSubjectDialog.classList.remove("fallback-modal");
+      restoreEditSubjectFocus();
+    }
+  }
+
+  function restoreEditSubjectFocus(){
+    const subjectButton = Array.from(els.subjects.querySelectorAll(".edit-subject-btn"))
+      .find(button => button.dataset.subjectId === editingSubjectId);
+    (subjectButton || editSubjectReturnFocus)?.focus();
+    editingSubjectId = null;
+    editingSubjectColor = null;
+    editSubjectReturnFocus = null;
+  }
+
+  function saveEditedSubject(){
+    const name = els.editSubjectName.value.trim();
+    if(!name){
+      alert("El nombre de la asignatura o periodo no puede estar vacío.");
+      els.editSubjectName.focus();
+      return;
+    }
+    const subject = getSubject(editingSubjectId);
+    if(!subject) return;
+
+    subject.name = name;
+    subject.color = editingSubjectColor;
+    renderAll();
+    closeEditSubjectDialog();
   }
 
   function openCommentEditor(subject, button){
@@ -1856,6 +2006,41 @@
   els.addSubject.addEventListener("click", addSubject);
   els.cancelCommentBtn.addEventListener("click", closeCommentEditor);
   els.saveCommentBtn.addEventListener("click", saveComment);
+  els.cancelEditSubjectBtn.addEventListener("click", closeEditSubjectDialog);
+  els.saveEditSubjectBtn.addEventListener("click", saveEditedSubject);
+  els.editSubjectName.addEventListener("keydown", event => {
+    if(event.key === "Enter"){
+      event.preventDefault();
+      saveEditedSubject();
+    }
+  });
+  els.editSubjectDialog.addEventListener("cancel", event => {
+    event.preventDefault();
+    closeEditSubjectDialog();
+  });
+  els.editSubjectDialog.addEventListener("close", restoreEditSubjectFocus);
+  els.editSubjectDialog.addEventListener("click", event => {
+    if(event.target === els.editSubjectDialog) closeEditSubjectDialog();
+  });
+  els.editSubjectDialog.addEventListener("keydown", event => {
+    if(!els.editSubjectDialog.classList.contains("fallback-modal")) return;
+    if(event.key === "Escape"){
+      event.preventDefault();
+      closeEditSubjectDialog();
+      return;
+    }
+    if(event.key !== "Tab") return;
+    const focusable = Array.from(els.editSubjectDialog.querySelectorAll("button, input"));
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if(event.shiftKey && document.activeElement === first){
+      event.preventDefault();
+      last.focus();
+    }else if(!event.shiftKey && document.activeElement === last){
+      event.preventDefault();
+      first.focus();
+    }
+  });
   els.commentDialog.addEventListener("cancel", event => {
     event.preventDefault();
     closeCommentEditor();
