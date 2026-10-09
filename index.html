@@ -122,6 +122,11 @@
     overflow:hidden;
     position:relative;
     background:#fff;
+    cursor:pointer;
+  }
+  .logo-box:focus-visible{
+    outline:2px solid #1f56c2;
+    outline-offset:3px;
   }
   .logo-box img{
     max-width:100%;
@@ -295,11 +300,56 @@
     color:#62676e;
     font-size:14px;
   }
-  .day-mode-controls{
+  .day-mode-row{
     display:flex;
+    align-items:center;
     flex-wrap:wrap;
-    gap:8px;
+    gap:10px;
     margin-bottom:16px;
+  }
+  .day-mode-label{
+    color:#555;
+    font-size:.9rem;
+  }
+  .day-mode-selector{
+    display:inline-flex;
+    overflow:hidden;
+    border:1px solid #cfcfcf;
+    border-radius:8px;
+    background:#fff;
+  }
+  .day-mode-option{
+    position:relative;
+    cursor:pointer;
+  }
+  .day-mode-option input{
+    position:absolute;
+    width:1px;
+    height:1px;
+    overflow:hidden;
+    clip:rect(0,0,0,0);
+    white-space:nowrap;
+    clip-path:inset(50%);
+  }
+  .day-mode-option span{
+    display:block;
+    padding:7px 14px;
+    border-right:1px solid #cfcfcf;
+    background:#fff;
+    color:#444;
+    font-size:.9rem;
+    transition:background .15s ease,color .15s ease;
+  }
+  .day-mode-option:last-child span{border-right:0}
+  .day-mode-option input:checked + span{
+    background:#1f56c2;
+    color:#fff;
+  }
+  .day-mode-option:hover span{background:#f3f3f3}
+  .day-mode-option input:checked + span:hover{background:#1f56c2}
+  .day-mode-option input:focus-visible + span{
+    outline:2px solid currentColor;
+    outline-offset:-3px;
   }
 
   .add-row{
@@ -734,8 +784,8 @@
 
     .month h3{
       margin:0 0 2mm 0 !important;
-      font-size:25pt !important;
-      line-height:1.1 !important;
+      font-size:10pt !important;
+      line-height:1.15 !important;
     }
 
     .weekdays{
@@ -841,7 +891,6 @@
       <button class="btn" id="loadCalendarBtn" type="button">↑ Cargar calendario</button>
       <input id="calendarFileInput" type="file" accept=".json,application/json" hidden>
       <button class="btn" id="downloadCalendarBtn" type="button">↓ Descargar calendario</button>
-      <button class="btn" id="logoBtn" type="button">Logo</button>
       <input id="logoInput" type="file" accept="image/*" hidden>
       <button class="btn primary" id="printBtn" type="button">Imprimir / PDF</button>
     </div>
@@ -849,7 +898,7 @@
 
   <main class="sheet" id="sheet">
     <header class="masthead">
-      <div class="logo-box" id="logoBox" title="Pulsa el botón Logo para cargar una imagen">
+      <div class="logo-box" id="logoBox" role="button" tabindex="0" aria-label="Seleccionar o cambiar logo">
         <span id="logoText">LOGO</span>
         <img id="logoImg" alt="Logo">
       </div>
@@ -880,10 +929,22 @@
       Añade una asignatura o periodo, selecciónalo y después pulsa sobre los días del calendario.
       Si pulsas un día que ya tiene el color activo, se desmarca. Si tenía otro color, se sustituye por el activo.
     </p>
-    <div class="day-mode-controls" role="group" aria-label="Modo de marcado de días">
-      <button class="btn primary" type="button" data-day-mode="calendar" aria-pressed="true">Calendario</button>
-      <button class="btn" type="button" data-day-mode="exam1" aria-pressed="false">Examen *</button>
-      <button class="btn" type="button" data-day-mode="exam2" aria-pressed="false">Examen **</button>
+    <div class="day-mode-row">
+      <span class="day-mode-label">Modo de marcado:</span>
+      <div class="day-mode-selector" role="radiogroup" aria-label="Modo de marcado de días">
+        <label class="day-mode-option">
+          <input type="radio" name="dayMode" value="calendar" checked>
+          <span>Clases</span>
+        </label>
+        <label class="day-mode-option">
+          <input type="radio" name="dayMode" value="exam1">
+          <span>Examen *</span>
+        </label>
+        <label class="day-mode-option">
+          <input type="radio" name="dayMode" value="exam2">
+          <span>Examen **</span>
+        </label>
+      </div>
     </div>
 
     <div class="add-row">
@@ -1028,7 +1089,7 @@
     months: document.getElementById("months"),
     legend: document.getElementById("legend"),
     examLegend: document.getElementById("examLegend"),
-    dayModeButtons: Array.from(document.querySelectorAll("[data-day-mode]")),
+    dayModeRadios: Array.from(document.querySelectorAll('input[name="dayMode"]')),
     palette: document.getElementById("palette"),
     newName: document.getElementById("newName"),
     addSubject: document.getElementById("addSubject"),
@@ -1064,7 +1125,7 @@
     calendarFileInput: document.getElementById("calendarFileInput"),
     downloadCalendarBtn: document.getElementById("downloadCalendarBtn"),
     printBtn: document.getElementById("printBtn"),
-    logoBtn: document.getElementById("logoBtn"),
+    logoBox: document.getElementById("logoBox"),
     logoInput: document.getElementById("logoInput"),
     logoImg: document.getElementById("logoImg"),
     logoText: document.getElementById("logoText")
@@ -1998,14 +2059,9 @@
   els.title.addEventListener("input", () => els.titleOut.textContent = els.title.value || "Título");
   els.edition.addEventListener("input", () => els.editionOut.textContent = els.edition.value || "EDICIÓN");
   els.showTopSubjects.addEventListener("change", renderTopSubjects);
-  els.dayModeButtons.forEach(button => {
-    button.addEventListener("click", () => {
-      state.dayMode = button.dataset.dayMode;
-      els.dayModeButtons.forEach(modeButton => {
-        const selected = modeButton === button;
-        modeButton.classList.toggle("primary", selected);
-        modeButton.setAttribute("aria-pressed", String(selected));
-      });
+  els.dayModeRadios.forEach(input => {
+    input.addEventListener("change", () => {
+      if(input.checked) state.dayMode = input.value;
     });
   });
   els.addSubject.addEventListener("click", addSubject);
@@ -2105,7 +2161,13 @@
 
   els.printBtn.addEventListener("click", () => window.print());
 
-  els.logoBtn.addEventListener("click", () => els.logoInput.click());
+  els.logoBox.addEventListener("click", () => els.logoInput.click());
+  els.logoBox.addEventListener("keydown", event => {
+    if(event.key === "Enter" || event.key === " "){
+      event.preventDefault();
+      els.logoInput.click();
+    }
+  });
   els.logoInput.addEventListener("change", () => {
     const file = els.logoInput.files?.[0];
     if(!file) return;

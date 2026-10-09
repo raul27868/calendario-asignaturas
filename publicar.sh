@@ -40,4 +40,6 @@ git commit -m "$commit_message" \
   -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 git push
 
+git log origin/main -1 --oneline
+
 printf '\nPush completado. GitHub Pages desplegará los cambios desde main automáticamente.\n'
