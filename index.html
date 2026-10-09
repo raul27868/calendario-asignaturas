@@ -351,6 +351,13 @@
     outline:2px solid currentColor;
     outline-offset:-3px;
   }
+  .double-class-control{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    color:#555;
+    font-size:.9rem;
+  }
 
   .add-row{
     display:grid;
@@ -928,6 +935,7 @@
     <p class="help">
       Añade una asignatura o periodo, selecciónalo y después pulsa sobre los días del calendario.
       Si pulsas un día que ya tiene el color activo, se desmarca. Si tenía otro color, se sustituye por el activo.
+      Activa «Clase doble» para asociar hasta dos asignaturas al mismo día.
     </p>
     <div class="day-mode-row">
       <span class="day-mode-label">Modo de marcado:</span>
@@ -945,6 +953,10 @@
           <span>Examen **</span>
         </label>
       </div>
+      <label class="double-class-control">
+        <input id="doubleClassMode" type="checkbox">
+        <span>Clase doble</span>
+      </label>
     </div>
 
     <div class="add-row">
@@ -1090,6 +1102,7 @@
     legend: document.getElementById("legend"),
     examLegend: document.getElementById("examLegend"),
     dayModeRadios: Array.from(document.querySelectorAll('input[name="dayMode"]')),
+    doubleClassMode: document.getElementById("doubleClassMode"),
     palette: document.getElementById("palette"),
     newName: document.getElementById("newName"),
     addSubject: document.getElementById("addSubject"),
@@ -1152,6 +1165,23 @@
     return state.subjects.find(s => s.id === id) || null;
   }
 
+  function getSubjectIdsForDate(date){
+    const value = state.marks[date];
+    if(!value) return [];
+    return Array.isArray(value) ? value : [value];
+  }
+
+  function setSubjectIdsForDate(date, subjectIds){
+    if(subjectIds.length > 2) throw new Error("Un día no puede tener más de dos asignaturas.");
+    if(subjectIds.length === 0){
+      delete state.marks[date];
+    }else if(subjectIds.length === 1){
+      state.marks[date] = subjectIds[0];
+    }else{
+      state.marks[date] = subjectIds.slice(0,2);
+    }
+  }
+
   function renderCalendar(){
     let year = parseInt(els.year.value,10);
     if(!Number.isFinite(year)) year = new Date().getFullYear();
@@ -1209,17 +1239,28 @@
         const key = dateKey(monthYear, month, day);
         el.dataset.date = key;
 
-        const subjectId = state.marks[key];
-        const subject = getSubject(subjectId);
-        if(subject){
-          const exam = state.exams[key];
-          const hasExam = exam === 1 || exam === 2;
-          el.title = key + " — " + subject.name + (subject.hidden ? " (oculto)" : "") +
+        const subjects = getSubjectIdsForDate(key)
+          .map(getSubject)
+          .filter(Boolean);
+        const visibleSubjects = subjects.filter(subject => !subject.hidden);
+        const exam = state.exams[key];
+        const hasExam = exam === 1 || exam === 2;
+        if(subjects.length){
+          el.title = key + " — " + subjects
+            .map(subject => subject.name + (subject.hidden ? " (oculto)" : ""))
+            .join(" + ") +
             (hasExam ? " — " + (exam === 1 ? "1ª" : "2ª") + " convocatoria" : "");
-          if(!subject.hidden){
-            el.style.backgroundColor = subject.color;
+          if(visibleSubjects.length === 1){
+            el.style.backgroundColor = visibleSubjects[0].color;
+          }else if(visibleSubjects.length === 2){
+            const [colorA, colorB] = visibleSubjects.map(subject => subject.color);
+            el.style.background = `linear-gradient(45deg, ${colorA} 0%, ${colorA} 49%, ${colorB} 51%, ${colorB} 100%)`;
+          }
+          if(visibleSubjects.length){
             el.classList.add("painted");
-            if(subject.id === state.activeId) el.dataset.active = "true";
+            if(visibleSubjects.some(subject => subject.id === state.activeId)){
+              el.dataset.active = "true";
+            }
             if(hasExam){
               const marker = document.createElement("sup");
               marker.textContent = exam === 1 ? "*" : "**";
@@ -1327,7 +1368,8 @@
         title.textContent = subject.name;
         const countLine = document.createElement("div");
         countLine.className = "subject-count";
-        const count = Object.values(state.marks).filter(id => id === subject.id).length;
+        const count = Object.keys(state.marks)
+          .filter(date => getSubjectIdsForDate(date).includes(subject.id)).length;
         countLine.textContent = count + " día" + (count===1 ? "" : "s") + " marcado" + (count===1 ? "" : "s");
         name.append(title, countLine);
 
@@ -1367,9 +1409,11 @@
         del.addEventListener("click", () => {
           if(!confirm('¿Eliminar "' + subject.name + '" y sus días marcados?')) return;
           Object.keys(state.marks).forEach(k => {
-            if(state.marks[k] === subject.id){
-              delete state.marks[k];
-              delete state.exams[k];
+            const subjectIds = getSubjectIdsForDate(k);
+            if(subjectIds.includes(subject.id)){
+              const remainingIds = subjectIds.filter(id => id !== subject.id);
+              if(remainingIds.length === 0) delete state.exams[k];
+              setSubjectIdsForDate(k, remainingIds);
             }
           });
           state.subjects = state.subjects.filter(s => s.id !== subject.id);
@@ -1412,7 +1456,7 @@
     els.sessionsTableWrap.innerHTML = "";
 
     const dates = Object.entries(state.marks)
-      .filter(([, subjectId]) => subjectId === subject.id)
+      .filter(([date]) => getSubjectIdsForDate(date).includes(subject.id))
       .map(([date]) => date)
       .sort();
     let sessionNumber = 0;
@@ -1756,11 +1800,13 @@
     if(!confirm('¿Intercambiar todos los días de "' + first.name + '" y "' + second.name + '"?')) return;
 
     for(const date of Object.keys(state.marks)){
-      if(state.marks[date] === first.id){
-        state.marks[date] = second.id;
-      }else if(state.marks[date] === second.id){
-        state.marks[date] = first.id;
-      }
+      const subjectIds = getSubjectIdsForDate(date);
+      const swappedIds = subjectIds.map(id => {
+        if(id === first.id) return second.id;
+        if(id === second.id) return first.id;
+        return id;
+      });
+      setSubjectIdsForDate(date, swappedIds);
     }
 
     els.calendarSwapControls.hidden = true;
@@ -1788,8 +1834,11 @@
 
   function renderExamLegend(){
     const hasVisibleExam = Object.entries(state.exams).some(([date, exam]) => {
-      const subject = getSubject(state.marks[date]);
-      return (exam === 1 || exam === 2) && subject && !subject.hidden;
+      return (exam === 1 || exam === 2) &&
+        getSubjectIdsForDate(date).some(id => {
+          const subject = getSubject(id);
+          return subject && !subject.hidden;
+        });
     });
     els.examLegend.hidden = !hasVisibleExam;
     els.examLegend.innerHTML = "";
@@ -1828,11 +1877,31 @@
       alert("Primero selecciona una asignatura o periodo.");
       return;
     }
-    if(state.marks[key] === state.activeId){
-      delete state.marks[key];
-      delete state.exams[key];
+    const subjectIds = getSubjectIdsForDate(key);
+    const doubleClassMode = els.doubleClassMode.checked;
+    if(subjectIds.length > 1 && !doubleClassMode){
+      alert("Este día contiene una clase doble. Activa 'Clase doble' para modificarlo.");
+      return;
+    }
+
+    if(!doubleClassMode){
+      if(subjectIds[0] === state.activeId){
+        setSubjectIdsForDate(key, []);
+        delete state.exams[key];
+      }else{
+        setSubjectIdsForDate(key, [state.activeId]);
+      }
+    }else if(subjectIds.includes(state.activeId)){
+      const remainingIds = subjectIds.filter(id => id !== state.activeId);
+      setSubjectIdsForDate(key, remainingIds);
+      if(remainingIds.length === 0) delete state.exams[key];
+    }else if(subjectIds.length === 0){
+      setSubjectIdsForDate(key, [state.activeId]);
+    }else if(subjectIds.length === 1){
+      setSubjectIdsForDate(key, [...subjectIds, state.activeId]);
     }else{
-      state.marks[key] = state.activeId;
+      alert("Este día ya tiene dos asignaturas.");
+      return;
     }
     renderCalendar();
     renderSubjects();
@@ -1975,15 +2044,29 @@
     });
 
     const marks = {};
-    for(const [date, subjectId] of Object.entries(data.marks)){
+    for(const [date, markValue] of Object.entries(data.marks)){
       if(!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Fecha inválida: " + date);
-      if(!ids.has(String(subjectId))) throw new Error("Un día marcado hace referencia a una asignatura inexistente.");
       const parsed = new Date(date + "T00:00:00");
       if(Number.isNaN(parsed.getTime()) || parsed.getFullYear() !== Number(date.slice(0,4)) ||
          parsed.getMonth() + 1 !== Number(date.slice(5,7)) || parsed.getDate() !== Number(date.slice(8,10))){
         throw new Error("Fecha inexistente: " + date);
       }
-      marks[date] = String(subjectId);
+
+      let subjectIds;
+      if(typeof markValue === "string"){
+        subjectIds = [markValue];
+      }else if(Array.isArray(markValue) && markValue.length === 2){
+        subjectIds = markValue;
+      }else{
+        throw new Error("Cada día debe tener una asignatura o una pareja de asignaturas: " + date);
+      }
+      if(subjectIds.some(id => typeof id !== "string" || !ids.has(id))){
+        throw new Error("Un día marcado hace referencia a una asignatura inexistente.");
+      }
+      if(new Set(subjectIds).size !== subjectIds.length){
+        throw new Error("Un día no puede tener dos veces la misma asignatura: " + date);
+      }
+      marks[date] = Array.isArray(markValue) ? [...subjectIds] : subjectIds[0];
     }
 
     if(data.exams !== undefined &&
