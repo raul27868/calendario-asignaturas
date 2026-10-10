@@ -1254,7 +1254,8 @@
             el.style.backgroundColor = visibleSubjects[0].color;
           }else if(visibleSubjects.length === 2){
             const [colorA, colorB] = visibleSubjects.map(subject => subject.color);
-            el.style.background = `linear-gradient(45deg, ${colorA} 0%, ${colorA} 49%, ${colorB} 51%, ${colorB} 100%)`;
+            //linear-gradient(180deg ... indica el angulo para el gradiate de doble color
+            el.style.background = `linear-gradient(180deg, ${colorA} 0%, ${colorA} 49%, ${colorB} 51%, ${colorB} 100%)`;
           }
           if(visibleSubjects.length){
             el.classList.add("painted");
